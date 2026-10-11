@@ -543,6 +543,15 @@ class _DesktopTabState extends State<DesktopTab>
   }
 
   List<Widget> _tabWidgets = [];
+
+  Widget _focusablePage(TabInfo tab) {
+    if (tabType != DesktopTabType.main) return tab.page;
+    return Obx(() => ExcludeFocus(
+          excluding: state.value.selectedTabInfo.key != tab.key,
+          child: tab.page,
+        ));
+  }
+
   Widget _buildPageView() {
     final child = Container(
         child: Obx(() => PageView(
@@ -565,12 +574,12 @@ class _DesktopTabState extends State<DesktopTab>
                   tabLen == _tabWidgets.length + 1) {
                 /// On add. Use the previous list(pointer) to prevent item's state init twice.
                 /// *[_tabWidgets.isNotEmpty] means TabsWindow(remote_tab_page or file_manager_tab_page) opened before, but was hidden. In this case, we have to reload, otherwise the child can't be built.
-                _tabWidgets.add(state.value.tabs.last.page);
+                _tabWidgets.add(_focusablePage(state.value.tabs.last));
                 return _tabWidgets;
               } else {
                 /// On remove or change. Use new list(pointer) to reload list children so that items loading order is normal.
                 /// the Widgets in list must enable [AutomaticKeepAliveClientMixin]
-                final newList = state.value.tabs.map((v) => v.page).toList();
+                final newList = state.value.tabs.map(_focusablePage).toList();
                 _tabWidgets = newList;
                 return newList;
               }

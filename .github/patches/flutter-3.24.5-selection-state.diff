@@ -1,0 +1,8 @@
+diff --git a/packages/flutter/lib/src/semantics/semantics.dart b/packages/flutter/lib/src/semantics/semantics.dart
+--- a/packages/flutter/lib/src/semantics/semantics.dart
++++ b/packages/flutter/lib/src/semantics/semantics.dart
+@@ -4631,3 +4631,4 @@
+   bool get isSelected => _hasFlag(SemanticsFlag.isSelected);
+   set isSelected(bool value) {
++    _setFlag(SemanticsFlag.hasSelectedState, true);
+     _setFlag(SemanticsFlag.isSelected, value);

@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_hbb/common/widgets/focus_aware_offstage.dart';
 import 'package:flutter_hbb/common/widgets/connection_page_title.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/widgets/popup_menu.dart';
@@ -66,7 +67,7 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
   @override
   Widget build(BuildContext context) {
     final isIncomingOnly = bind.isIncomingOnly();
-    startServiceWidget() => Offstage(
+    startServiceWidget() => FocusAwareOffstage(
           offstage: !_svcStopped.value,
           child: InkWell(
                   onTap: () async {
@@ -79,7 +80,7 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
         );
 
     setupServerWidget() => Flexible(
-          child: Offstage(
+          child: FocusAwareOffstage(
             offstage: !(!_svcStopped.value &&
                 stateGlobal.svcStatus.value == SvcStatus.ready &&
                 _svcIsUsingPublicServer.value),
@@ -201,7 +202,6 @@ class _ConnectionPageState extends State<ConnectionPage>
   /// Controller for the id input bar.
   final _idController = IDTextEditingController();
 
-  final RxBool _idInputFocused = false.obs;
   final FocusNode _idFocusNode = FocusNode();
   final TextEditingController _idEditingController = TextEditingController();
 
@@ -288,7 +288,6 @@ class _ConnectionPageState extends State<ConnectionPage>
   }
 
   void onFocusChanged() {
-    _idInputFocused.value = _idFocusNode.hasFocus;
     if (_idFocusNode.hasFocus) {
       if (_allPeersLoader.needLoad) {
         _allPeersLoader.getAllPeers();
@@ -414,36 +413,34 @@ class _ConnectionPageState extends State<ConnectionPage>
                   ) {
                     updateTextAndPreserveSelection(
                         fieldTextEditingController, _idController.text);
-                    return Obx(() => TextField(
-                          autocorrect: false,
-                          enableSuggestions: false,
-                          keyboardType: TextInputType.visiblePassword,
-                          focusNode: fieldFocusNode,
-                          style: const TextStyle(
-                            fontFamily: 'WorkSans',
-                            fontSize: 22,
-                            height: 1.4,
-                          ),
-                          maxLines: 1,
-                          cursorColor:
-                              Theme.of(context).textTheme.titleLarge?.color,
-                          decoration: InputDecoration(
-                              filled: false,
-                              counterText: '',
-                              hintText: _idInputFocused.value
-                                  ? null
-                                  : translate('Enter Remote ID'),
-                              contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 15, vertical: 13)),
-                          controller: fieldTextEditingController,
-                          inputFormatters: [IDTextInputFormatter()],
-                          onChanged: (v) {
-                            _idController.id = v;
-                          },
-                          onSubmitted: (_) {
-                            onConnect();
-                          },
-                        ).workaroundFreezeLinuxMint());
+                    return TextField(
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      keyboardType: TextInputType.visiblePassword,
+                      focusNode: fieldFocusNode,
+                      style: const TextStyle(
+                        fontFamily: 'WorkSans',
+                        fontSize: 22,
+                        height: 1.4,
+                      ),
+                      maxLines: 1,
+                      cursorColor:
+                          Theme.of(context).textTheme.titleLarge?.color,
+                      decoration: InputDecoration(
+                          filled: false,
+                          counterText: '',
+                          labelText: translate('Enter Remote ID'),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 15, vertical: 13)),
+                      controller: fieldTextEditingController,
+                      inputFormatters: [IDTextInputFormatter()],
+                      onChanged: (v) {
+                        _idController.id = v;
+                      },
+                      onSubmitted: (_) {
+                        onConnect();
+                      },
+                    ).workaroundFreezeLinuxMint();
                   },
                   onSelected: (option) {
                     setState(() {
@@ -538,19 +535,22 @@ class _ConnectionPageState extends State<ConnectionPage>
                   child: Center(
                     child: StatefulBuilder(
                       builder: (context, setState) {
-                        var offset = Offset(0, 0);
-                        return Obx(() => InkWell(
-                              child: _menuOpen.value
+                        return Obx(() => IconButton(
+                              tooltip: translate('More'),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              icon: _menuOpen.value
                                   ? Transform.rotate(
                                       angle: pi,
                                       child: Icon(IconFont.more, size: 14),
                                     )
                                   : Icon(IconFont.more, size: 14),
-                              onTapDown: (e) {
-                                offset = e.globalPosition;
-                              },
-                              onTap: () async {
+                              onPressed: () async {
                                 _menuOpen.value = true;
+                                final box =
+                                    context.findRenderObject() as RenderBox;
+                                final offset = box
+                                    .localToGlobal(Offset(0, box.size.height));
                                 final x = offset.dx;
                                 final y = offset.dy;
                                 await mod_menu

@@ -151,24 +151,30 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                 left: 12,
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: InkWell(
-                    child: Obx(
-                      () => Icon(
-                        Icons.settings,
-                        color: _editHover.value
-                            ? textColor
-                            : Colors.grey.withOpacity(0.5),
-                        size: 22,
+                  child: MouseRegion(
+                    onEnter: (_) => _editHover.value = true,
+                    onExit: (_) => _editHover.value = false,
+                    child: IconButton(
+                      tooltip: translate('Settings'),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      icon: Obx(
+                        () => Icon(
+                          Icons.settings,
+                          color: _editHover.value
+                              ? textColor
+                              : Colors.grey.withOpacity(0.5),
+                          size: 22,
+                        ),
                       ),
+                      onPressed: () => {
+                        if (DesktopSettingPage.tabKeys.isNotEmpty)
+                          {
+                            DesktopSettingPage.switch2page(
+                                DesktopSettingPage.tabKeys[0])
+                          }
+                      },
                     ),
-                    onTap: () => {
-                      if (DesktopSettingPage.tabKeys.isNotEmpty)
-                        {
-                          DesktopSettingPage.switch2page(
-                              DesktopSettingPage.tabKeys[0])
-                        }
-                    },
-                    onHover: (value) => _editHover.value = value,
                   ),
                 ),
               )
@@ -231,17 +237,21 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                             ClipboardData(text: model.serverId.text));
                         showToast(translate("Copied"));
                       },
-                      child: TextFormField(
-                        controller: model.serverId,
-                        readOnly: true,
-                        decoration: InputDecoration(
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.only(top: 10, bottom: 10),
-                        ),
-                        style: TextStyle(
-                          fontSize: 22,
-                        ),
-                      ).workaroundFreezeLinuxMint(),
+                      child: Semantics(
+                        label: translate('ID'),
+                        child: TextFormField(
+                          controller: model.serverId,
+                          readOnly: true,
+                          decoration: InputDecoration(
+                            border: InputBorder.none,
+                            contentPadding:
+                                EdgeInsets.only(top: 10, bottom: 10),
+                          ),
+                          style: TextStyle(
+                            fontSize: 22,
+                          ),
+                        ).workaroundFreezeLinuxMint(),
+                      ),
                     ),
                   )
                 ],
@@ -256,11 +266,15 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   Widget buildPopupMenu(BuildContext context) {
     final textColor = Theme.of(context).textTheme.titleLarge?.color;
     RxBool hover = false.obs;
-    return InkWell(
-      onTap: DesktopTabPage.onAddSetting,
-      child: Tooltip(
-        message: translate('Settings'),
-        child: Obx(
+    return MouseRegion(
+      onEnter: (_) => hover.value = true,
+      onExit: (_) => hover.value = false,
+      child: IconButton(
+        tooltip: translate('Settings'),
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(),
+        onPressed: DesktopTabPage.onAddSetting,
+        icon: Obx(
           () => CircleAvatar(
             radius: 15,
             backgroundColor: hover.value
@@ -274,7 +288,6 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           ),
         ),
       ),
-      onHover: (value) => hover.value = value,
     );
   }
 
@@ -328,16 +341,19 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                               showToast(translate("Copied"));
                             }
                           },
-                          child: TextFormField(
-                            controller: model.serverPasswd,
-                            readOnly: true,
-                            decoration: InputDecoration(
-                              border: InputBorder.none,
-                              contentPadding:
-                                  EdgeInsets.only(top: 14, bottom: 10),
-                            ),
-                            style: TextStyle(fontSize: 15),
-                          ).workaroundFreezeLinuxMint(),
+                          child: Semantics(
+                            label: translate('One-time Password'),
+                            child: TextFormField(
+                              controller: model.serverPasswd,
+                              readOnly: true,
+                              decoration: InputDecoration(
+                                border: InputBorder.none,
+                                contentPadding:
+                                    EdgeInsets.only(top: 14, bottom: 10),
+                              ),
+                              style: TextStyle(fontSize: 15),
+                            ).workaroundFreezeLinuxMint(),
+                          ),
                         ),
                       ),
                       if (showOneTime)
@@ -345,10 +361,12 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                           onPressed: () => bind.mainUpdateTemporaryPassword(),
                           child: Tooltip(
                             message: translate('Refresh Password'),
+                            excludeFromSemantics: true,
                             child: Obx(() => RotatedBox(
                                 quarterTurns: 2,
                                 child: Icon(
                                   Icons.refresh,
+                                  semanticLabel: translate('Refresh Password'),
                                   color: refreshHover.value
                                       ? textColor
                                       : Color(0xFFDDDDDD),
@@ -358,10 +376,14 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                           onHover: (value) => refreshHover.value = value,
                         ).marginOnly(right: 8, top: 4),
                       if (!bind.isDisableSettings())
-                        InkWell(
-                          child: Tooltip(
-                            message: translate('Change Password'),
-                            child: Obx(
+                        MouseRegion(
+                          onEnter: (_) => editHover.value = true,
+                          onExit: (_) => editHover.value = false,
+                          child: IconButton(
+                            tooltip: translate('Change Password'),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            icon: Obx(
                               () => Icon(
                                 Icons.edit,
                                 color: editHover.value
@@ -370,10 +392,9 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                                 size: 22,
                               ).marginOnly(right: 8, top: 4),
                             ),
+                            onPressed: () => DesktopSettingPage.switch2page(
+                                SettingsTabKey.safety),
                           ),
-                          onTap: () => DesktopSettingPage.switch2page(
-                              SettingsTabKey.safety),
-                          onHover: (value) => editHover.value = value,
                         ),
                     ],
                   ),

@@ -1,0 +1,235 @@
+diff --git a/fml/hex_codec.h b/fml/hex_codec.h
+index 4de83fb..60be379 100644
+--- a/fml/hex_codec.h
++++ b/fml/hex_codec.h
+@@ -5,6 +5,7 @@
+ #ifndef FLUTTER_FML_HEX_CODEC_H_
+ #define FLUTTER_FML_HEX_CODEC_H_
+ 
++#include <string>
+ #include <string_view>
+ 
+ namespace fml {
+diff --git a/lib/ui/semantics.dart b/lib/ui/semantics.dart
+index 57bc1fa..747ef25 100644
+--- a/lib/ui/semantics.dart
++++ b/lib/ui/semantics.dart
+@@ -335,6 +335,7 @@ class SemanticsFlag {
+   static const int _kIsCheckStateMixedIndex = 1 << 25;
+   static const int _kHasExpandedStateIndex = 1 << 26;
+   static const int _kIsExpandedIndex = 1 << 27;
++  static const int _kHasSelectedStateIndex = 1 << 28;
+   // READ THIS: if you add a flag here, you MUST update the numSemanticsFlags
+   // value in testing/dart/semantics_test.dart and
+   // lib/web_ui/test/engine/semantics/semantics_api_test.dart, or tests will
+@@ -601,6 +602,9 @@ class SemanticsFlag {
+   ///   * [SemanticsFlag.hasExpandedState], which enables an expanded/collapsed state.
+   static const SemanticsFlag isExpanded = SemanticsFlag._(_kIsExpandedIndex, 'isExpanded');
+ 
++  /// Whether the node has a selected state.
++  static const SemanticsFlag hasSelectedState = SemanticsFlag._(_kHasSelectedStateIndex, 'hasSelectedState');
++
+   /// The possible semantics flags.
+   ///
+   /// The map's key is the [index] of the flag and the value is the flag itself.
+@@ -633,6 +637,7 @@ class SemanticsFlag {
+     _kIsCheckStateMixedIndex: isCheckStateMixed,
+     _kHasExpandedStateIndex: hasExpandedState,
+     _kIsExpandedIndex: isExpanded,
++    _kHasSelectedStateIndex: hasSelectedState,
+   };
+ 
+   static List<SemanticsFlag> get values => _kFlagById.values.toList(growable: false);
+diff --git a/lib/ui/semantics/semantics_node.h b/lib/ui/semantics/semantics_node.h
+index c27ac35..388d049 100644
+--- a/lib/ui/semantics/semantics_node.h
++++ b/lib/ui/semantics/semantics_node.h
+@@ -91,6 +91,7 @@ enum class SemanticsFlags : int32_t {
+   kIsCheckStateMixed = 1 << 25,
+   kHasExpandedState = 1 << 26,
+   kIsExpanded = 1 << 27,
++  kHasSelectedState = 1 << 28,
+ };
+ 
+ const int kScrollableSemanticsFlags =
+diff --git a/shell/platform/common/accessibility_bridge.cc b/shell/platform/common/accessibility_bridge.cc
+index 9a6e020..872cce1 100644
+--- a/shell/platform/common/accessibility_bridge.cc
++++ b/shell/platform/common/accessibility_bridge.cc
+@@ -366,7 +366,7 @@ void AccessibilityBridge::SetStateFromFlutterUpdate(ui::AXNodeData& node_data,
+   }
+   if (node_data.role == ax::mojom::Role::kStaticText &&
+       (actions & kHasScrollingAction) == 0 && node.value.empty() &&
+-      node.label.empty() && node.hint.empty()) {
++      node.label.empty() && node.hint.empty() && node.tooltip.empty()) {
+     node_data.AddState(ax::mojom::State::kIgnored);
+   } else {
+     // kFlutterSemanticsFlagIsFocusable means a keyboard focusable, it is
+@@ -433,9 +433,11 @@ void AccessibilityBridge::SetBooleanAttributesFromFlutterUpdate(
+   // TODO(chunhtai): figure out if there is a node that does not clip overflow.
+   node_data.AddBoolAttribute(ax::mojom::BoolAttribute::kClipsChildren,
+                              !node.children_in_traversal_order.empty());
+-  node_data.AddBoolAttribute(
+-      ax::mojom::BoolAttribute::kSelected,
+-      flags & FlutterSemanticsFlag::kFlutterSemanticsFlagIsSelected);
++  if (flags & FlutterSemanticsFlag::kFlutterSemanticsFlagHasSelectedState) {
++    node_data.AddBoolAttribute(
++        ax::mojom::BoolAttribute::kSelected,
++        flags & FlutterSemanticsFlag::kFlutterSemanticsFlagIsSelected);
++  }
+   node_data.AddBoolAttribute(
+       ax::mojom::BoolAttribute::kEditableRoot,
+       flags & FlutterSemanticsFlag::kFlutterSemanticsFlagIsTextField &&
+diff --git a/shell/platform/embedder/embedder.h b/shell/platform/embedder/embedder.h
+index 069c813..b1483fc 100644
+--- a/shell/platform/embedder/embedder.h
++++ b/shell/platform/embedder/embedder.h
+@@ -243,6 +243,8 @@ typedef enum {
+   kFlutterSemanticsFlagHasExpandedState = 1 << 26,
+   /// Whether a semantic node that hasExpandedState is currently expanded.
+   kFlutterSemanticsFlagIsExpanded = 1 << 27,
++  /// Whether the node has a selected state.
++  kFlutterSemanticsFlagHasSelectedState = 1 << 28,
+ } FlutterSemanticsFlag;
+ 
+ typedef enum {
+diff --git a/shell/platform/windows/accessibility_bridge_windows_unittests.cc b/shell/platform/windows/accessibility_bridge_windows_unittests.cc
+index f2244bb..af9fb57 100644
+--- a/shell/platform/windows/accessibility_bridge_windows_unittests.cc
++++ b/shell/platform/windows/accessibility_bridge_windows_unittests.cc
+@@ -115,6 +115,7 @@ std::unique_ptr<FlutterWindowsEngine> GetTestEngine() {
+   auto engine = std::make_unique<FlutterWindowsEngine>(project);
+ 
+   EngineModifier modifier(engine.get());
++  modifier.embedder_api().RunsAOTCompiledDartCode = [] { return false; };
+   modifier.embedder_api().UpdateSemanticsEnabled =
+       [](FLUTTER_API_SYMBOL(FlutterEngine) engine, bool enabled) {
+         return kSuccess;
+@@ -251,6 +252,87 @@ TEST(AccessibilityBridgeWindows, GetParent) {
+             node1_delegate->GetParent());
+ }
+ 
++TEST(AccessibilityBridgeWindows, HitTestSkipsIgnoredLeaf) {
++  auto engine = GetTestEngine();
++  FlutterWindowsViewSpy view{
++      engine.get(), std::make_unique<NiceMock<MockWindowBindingHandler>>()};
++  EngineModifier modifier{engine.get()};
++  modifier.SetImplicitView(&view);
++  view.OnUpdateSemanticsEnabled(true);
++  auto bridge = view.accessibility_bridge().lock();
++  FlutterSemanticsNode2 root{sizeof(FlutterSemanticsNode2), 0};
++  const int32_t child_id = 1;
++  root.child_count = 1;
++  root.children_in_traversal_order = &child_id;
++  root.children_in_hit_test_order = &child_id;
++  root.rect = {0, 0, 100, 100};
++  root.transform = {1, 0, 0, 0, 1, 0, 0, 0, 1};
++  FlutterSemanticsNode2 leaf{sizeof(FlutterSemanticsNode2), 1};
++  leaf.rect = root.rect;
++  leaf.transform = root.transform;
++  bridge->AddFlutterSemanticsNodeUpdate(root);
++  bridge->AddFlutterSemanticsNodeUpdate(leaf);
++  bridge->CommitUpdates();
++  auto root_delegate = bridge->GetFlutterPlatformNodeDelegateFromID(0).lock();
++  EXPECT_TRUE(bridge->GetFlutterPlatformNodeDelegateFromID(1)
++                  .lock()
++                  ->GetAXNode()
++                  ->IsIgnored());
++  EXPECT_EQ(root_delegate->HitTestSync(10, 10),
++            root_delegate->GetNativeViewAccessible());
++}
++
++TEST(AccessibilityBridgeWindows, MsaaSelectionStateRequiresDeclaration) {
++  auto engine = GetTestEngine();
++  FlutterWindowsViewSpy view{
++      engine.get(), std::make_unique<NiceMock<MockWindowBindingHandler>>()};
++  EngineModifier modifier{engine.get()};
++  modifier.SetImplicitView(&view);
++  view.OnUpdateSemanticsEnabled(true);
++  auto bridge = view.accessibility_bridge().lock();
++  FlutterSemanticsNode2 node{sizeof(FlutterSemanticsNode2), 0};
++  node.label = "control";
++  node.rect = {0, 0, 100, 100};
++  node.transform = {1, 0, 0, 0, 1, 0, 0, 0, 1};
++  const int states[] = {
++      kFlutterSemanticsFlagIsButton,
++      kFlutterSemanticsFlagIsTextField,
++      kFlutterSemanticsFlagIsButton | kFlutterSemanticsFlagHasSelectedState,
++      kFlutterSemanticsFlagIsButton | kFlutterSemanticsFlagHasSelectedState |
++          kFlutterSemanticsFlagIsSelected,
++      kFlutterSemanticsFlagIsButton,
++      0};
++  for (int flags : states) {
++    node.label = flags == 0 ? "" : "control";
++    node.tooltip = flags == 0 ? "Settings" : "";
++    node.actions = static_cast<FlutterSemanticsAction>(
++        flags == 0 ? kFlutterSemanticsActionTap : 0);
++    node.flags = static_cast<FlutterSemanticsFlag>(flags);
++    bridge->AddFlutterSemanticsNodeUpdate(node);
++    bridge->CommitUpdates();
++    auto native = bridge->GetFlutterPlatformNodeDelegateFromID(0)
++                      .lock()
++                      ->GetNativeViewAccessible();
++    VARIANT self{}, state{};
++    self.vt = VT_I4;
++    self.lVal = CHILDID_SELF;
++    ASSERT_EQ(native->get_accState(self, &state), S_OK);
++    ASSERT_EQ(state.vt, VT_I4);
++    EXPECT_EQ((state.lVal & STATE_SYSTEM_SELECTABLE) != 0,
++              (flags & kFlutterSemanticsFlagHasSelectedState) != 0);
++    EXPECT_EQ((state.lVal & STATE_SYSTEM_SELECTED) != 0,
++              (flags & kFlutterSemanticsFlagIsSelected) != 0);
++    EXPECT_EQ(state.lVal & STATE_SYSTEM_INVISIBLE, 0);
++    EXPECT_EQ(state.lVal & STATE_SYSTEM_OFFSCREEN, 0);
++    if (flags == 0) {
++      BSTR name = nullptr;
++      ASSERT_EQ(native->get_accName(self, &name), S_OK);
++      EXPECT_STREQ(name, L"Settings");
++      SysFreeString(name);
++    }
++  }
++}
++
+ TEST(AccessibilityBridgeWindows, GetParentOnRootRetunsNullptr) {
+   auto engine = GetTestEngine();
+   FlutterWindowsViewSpy view{
+diff --git a/shell/platform/windows/flutter_platform_node_delegate_windows.cc b/shell/platform/windows/flutter_platform_node_delegate_windows.cc
+index 56d8547..7f8a68d 100644
+--- a/shell/platform/windows/flutter_platform_node_delegate_windows.cc
++++ b/shell/platform/windows/flutter_platform_node_delegate_windows.cc
+@@ -75,6 +75,9 @@ gfx::NativeViewAccessible FlutterPlatformNodeDelegateWindows::HitTestSync(
+   }
+ 
+   // If no children contain the point, but this node does, return this node.
++  if (GetAXNode()->IsIgnored()) {
++    return nullptr;
++  }
+   return ax_platform_node_->GetNativeViewAccessible();
+ }
+ 
+diff --git a/shell/platform/windows/flutter_windows_engine.cc b/shell/platform/windows/flutter_windows_engine.cc
+index 6962136..cb1799f 100644
+--- a/shell/platform/windows/flutter_windows_engine.cc
++++ b/shell/platform/windows/flutter_windows_engine.cc
+@@ -66,7 +66,7 @@ FlutterRendererConfig GetOpenGLRendererConfig() {
+     if (!host->egl_manager()) {
+       return false;
+     }
+-    return host->egl_manager()->render_context()->ClearCurrent();
++    return host->egl_manager()->render_context()->MakeCurrent();
+   };
+   config.open_gl.present = [](void* user_data) -> bool { FML_UNREACHABLE(); };
+   config.open_gl.fbo_reset_after_present = true;
+diff --git a/testing/dart/semantics_test.dart b/testing/dart/semantics_test.dart
+index 24c5bd1..74df7de 100644
+--- a/testing/dart/semantics_test.dart
++++ b/testing/dart/semantics_test.dart
+@@ -11,7 +11,7 @@ import 'package:litetest/litetest.dart';
+ 
+ void main() {
+   // This must match the number of flags in lib/ui/semantics.dart
+-  const int numSemanticsFlags = 28;
++  const int numSemanticsFlags = 29;
+   test('SemanticsFlag.values refers to all flags.', () async {
+     expect(SemanticsFlag.values.length, equals(numSemanticsFlags));
+     for (int index = 0; index < numSemanticsFlags; ++index) {

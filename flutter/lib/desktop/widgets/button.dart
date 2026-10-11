@@ -120,7 +120,9 @@ class _FixedWidthButtonState extends State<FixedWidthButton> {
 
   @override
   Widget build(BuildContext context) {
-    return Obx(() => InkWell(
+    return Obx(() => Semantics(
+        button: true,
+        child: InkWell(
           onTapDown: (_) => pressed.value = true,
           onTapUp: (_) => pressed.value = false,
           onTapCancel: () => pressed.value = false,
@@ -166,6 +168,6 @@ class _FixedWidthButtonState extends State<FixedWidthButton> {
               ],
             ),
           ),
-        ));
+        )));
   }
 }

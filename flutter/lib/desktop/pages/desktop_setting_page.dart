@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/common/widgets/audio_input.dart';
+import 'package:flutter_hbb/common/widgets/focus_aware_offstage.dart';
 import 'package:flutter_hbb/common/widgets/setting_widgets.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_home_page.dart';
@@ -244,7 +245,12 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
           break;
       }
     }
-    return children;
+    return children.asMap().entries.map((entry) {
+      return Obx(() => ExcludeFocus(
+            excluding: selectedTab.value != DesktopSettingPage.tabKeys[entry.key],
+            child: entry.value,
+          ));
+    }).toList();
   }
 
   Widget _buildBlock({required List<Widget> children}) {
@@ -715,7 +721,7 @@ class _GeneralState extends State<_General> {
   Widget hwcodec() {
     final hwcodec = bind.mainHasHwcodec();
     final vram = bind.mainHasVram();
-    return Offstage(
+    return FocusAwareOffstage(
       offstage: !(hwcodec || vram),
       child: _Card(title: 'Hardware Codec', children: [
         _OptionCheckBox(
@@ -906,7 +912,7 @@ class _GeneralState extends State<_General> {
       () {
         final enabled = mainGetLocalBoolOptionSync(kOptionEnableWebrtc);
         final isOptFixed = isOptionFixed(kOptionRelayFallbackDelay);
-        return Offstage(
+        return FocusAwareOffstage(
           offstage: !enabled,
           child: Tooltip(
             message: translate('relay-fallback-delay-tip'),
@@ -933,7 +939,7 @@ class _GeneralState extends State<_General> {
                     ),
                   ).workaroundFreezeLinuxMint().marginOnly(right: 15),
                 ),
-                Obx(() => Offstage(
+                Obx(() => FocusAwareOffstage(
                       offstage: typed.value.trim() == saved.value.trim(),
                       child: ElevatedButton(
                         onPressed: enabled &&
@@ -1296,10 +1302,12 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
               .map((value) => GestureDetector(
                     child: Row(
                       children: [
-                        Radio(
-                            value: value,
-                            groupValue: model.temporaryPasswordLength,
-                            onChanged: onChanged),
+                        Semantics(
+                          label: value,
+                          child: Radio(
+                              value: value,
+                              groupValue: model.temporaryPasswordLength,
+                              onChanged: onChanged)),
                         Text(
                           value,
                           style: TextStyle(
@@ -1320,6 +1328,7 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
                 child: Row(
               children: [
                 Checkbox(
+                        semanticLabel: translate('Numeric one-time password'),
                         value: model.allowNumericOneTimePassword,
                         onChanged: isNumOPTChangable
                             ? (bool? v) {
@@ -1416,12 +1425,13 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
     }
 
     bool value = bind.mainIsShareRdp();
-    return Offstage(
+    return FocusAwareOffstage(
       offstage: !(isWindows && bind.mainIsInstalled()),
       child: GestureDetector(
           child: Row(
             children: [
               Checkbox(
+                      semanticLabel: translate('Enable RDP session sharing'),
                       value: value,
                       onChanged: enabled ? (_) => onChanged(!value) : null)
                   .marginOnly(right: 5),
@@ -1452,7 +1462,7 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
           controller.text =
               bind.mainGetOptionSync(key: kOptionDirectAccessPort);
           final isOptFixed = isOptionFixed(kOptionDirectAccessPort);
-          return Offstage(
+          return FocusAwareOffstage(
             offstage: !enabled,
             child: _SubLabeledWidget(
               context,
@@ -1522,6 +1532,7 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
           child: Obx(() => Row(
                 children: [
                   Checkbox(
+                          semanticLabel: translate('Use IP Whitelisting'),
                           value: hasWhitelist.value,
                           onChanged: enabled && !isOptFixed ? onChanged : null)
                       .marginOnly(right: 5),
@@ -1572,6 +1583,7 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
         child: Obx(() => Row(
               children: [
                 Checkbox(
+                        semanticLabel: translate('Use ID whitelisting'),
                         value: hasIdWhitelist.value,
                         onChanged: enabled && !isOptFixed ? onChanged : null)
                     .marginOnly(right: 5),
@@ -1621,6 +1633,8 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
                 child: Row(
                   children: [
                     Checkbox(
+                            semanticLabel:
+                                translate('Hide connection management window'),
                             value: model.hideCm,
                             onChanged: enabled && enableHideCm
                                 ? onHideCmChanged
@@ -1655,7 +1669,7 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
         controller.text =
             bind.mainGetOptionSync(key: kOptionAutoDisconnectTimeout);
         final isOptFixed = isOptionFixed(kOptionAutoDisconnectTimeout);
-        return Offstage(
+        return FocusAwareOffstage(
           offstage: !enabled,
           child: _SubLabeledWidget(
             context,
@@ -1716,6 +1730,7 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
       child: Obx(() => Row(
             children: [
               Checkbox(
+                      semanticLabel: translate('Unlock with PIN'),
                       value: unlockPin.isNotEmpty,
                       onChanged: enabled && !isOptFixed ? onChanged : null)
                   .marginOnly(right: 5),
@@ -2011,7 +2026,7 @@ class _DisplayState extends State<_Display> {
             groupValue: groupValue,
             label: 'ScrollEdge',
             onChanged: isOptFixed ? null : onChanged),
-        Offstage(
+        FocusAwareOffstage(
             offstage: groupValue != kRemoteScrollStyleEdge,
             child: EdgeThicknessControl(
               value: double.tryParse(bind.mainGetUserDefaultOption(
@@ -2055,7 +2070,7 @@ class _DisplayState extends State<_Display> {
           groupValue: groupValue,
           label: 'Custom',
           onChanged: isOptFixed ? null : onChanged),
-      Offstage(
+      FocusAwareOffstage(
         offstage: groupValue != kRemoteImageQualityCustom,
         child: customImageQualitySetting(),
       )
@@ -2190,6 +2205,7 @@ class _DisplayState extends State<_Display> {
         child: Row(
           children: [
             Checkbox(
+                    semanticLabel: translate(label),
                     value: value,
                     onChanged: isOptFixed ? null : (_) => onChanged(!value))
                 .marginOnly(right: 5),
@@ -2240,7 +2256,7 @@ class _AccountState extends State<_Account> {
   }
 
   Widget useInfo() {
-    return Obx(() => Offstage(
+    return Obx(() => FocusAwareOffstage(
           offstage: gFFI.userModel.userName.value.isEmpty,
           child: Container(
             padding: const EdgeInsets.all(12),
@@ -2339,6 +2355,7 @@ class _CheckboxState extends State<_Checkbox> {
       child: Row(
         children: [
           Checkbox(
+            semanticLabel: translate(widget.label),
             value: value,
             onChanged: (_) => onChanged(!value),
           ).marginOnly(right: 5),
@@ -2693,6 +2710,7 @@ Widget _OptionCheckBox(
       () => Row(
         children: [
           Checkbox(
+                  semanticLabel: translate(label),
                   value: ref.value,
                   onChanged: enabled && !isOptFixed ? onChanged : null)
               .marginOnly(right: 5),
@@ -2733,7 +2751,11 @@ Widget _Radio<T>(BuildContext context,
   return GestureDetector(
     child: Row(
       children: [
-        Radio<T>(value: value, groupValue: groupValue, onChanged: onChange2),
+        Semantics(
+          label: translate(label),
+          child: Radio<T>(
+              value: value, groupValue: groupValue, onChanged: onChange2),
+        ),
         Expanded(
           child: Text(translate(label),
                   overflow: autoNewLine ? null : TextOverflow.ellipsis,
@@ -2964,7 +2986,7 @@ Widget _lock(
   String label,
   Function() onUnlock,
 ) {
-  return Offstage(
+  return FocusAwareOffstage(
       offstage: !locked,
       child: Row(
         children: [

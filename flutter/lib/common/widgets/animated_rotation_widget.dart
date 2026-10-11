@@ -42,12 +42,16 @@ class AnimatedRotationWidgetState extends State<AnimatedRotationWidget> {
             setState(() => turns += 1.0);
           }
         },
-        child: InkWell(
-            onTap: () {
-              if (mounted) setState(() => turns += 1.0);
-              widget.onPressed();
-            },
-            onHover: widget.onHover,
-            child: widget.child));
+        child: MouseRegion(
+            onEnter: (_) => widget.onHover?.call(true),
+            onExit: (_) => widget.onHover?.call(false),
+            child: IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: () {
+                  if (mounted) setState(() => turns += 1.0);
+                  widget.onPressed();
+                },
+                icon: widget.child)));
   }
 }
