@@ -207,7 +207,7 @@ void showServerSettingsWithValue(
   });
 }
 
-TextFormField serverSettingsTextFormField({
+Widget serverSettingsTextFormField({
   required String label,
   required TextEditingController controller,
   required String errorMsg,
@@ -216,7 +216,7 @@ TextFormField serverSettingsTextFormField({
   bool showLabelText = true,
   EdgeInsetsGeometry? contentPadding,
 }) {
-  return TextFormField(
+  final field = TextFormField(
     controller: controller,
     decoration: InputDecoration(
       labelText: showLabelText ? label : null,
@@ -234,6 +234,7 @@ TextFormField serverSettingsTextFormField({
     enableIMEPersonalizedLearning: false,
     spellCheckConfiguration: const SpellCheckConfiguration.disabled(),
   );
+  return showLabelText ? field : Semantics(label: label, child: field);
 }
 
 void setPrivacyModeDialog(

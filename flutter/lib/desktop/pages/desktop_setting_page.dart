@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/common/widgets/audio_input.dart';
+import 'package:flutter_hbb/common/widgets/accessible_tab_navigation.dart';
 import 'package:flutter_hbb/common/widgets/focus_aware_offstage.dart';
 import 'package:flutter_hbb/common/widgets/setting_widgets.dart';
 import 'package:flutter_hbb/consts.dart';
@@ -348,29 +349,37 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
   }
 
   Widget _listView({required List<_TabInfo> tabs}) {
-    final scrollController = ScrollController();
-    return ListView(
-      controller: scrollController,
-      children: tabs.map((tab) => _listItem(tab: tab)).toList(),
-    );
+    return Obx(() => AccessibleTabNavigation(
+          itemCount: tabs.length,
+          selectedIndex: DesktopSettingPage.tabKeys.indexOf(selectedTab.value),
+          direction: Axis.vertical,
+          onSelected: (index) => _selectTab(tabs[index]),
+          builder: (nodes) => ListView(
+            children: tabs.asMap().entries.map((entry) => _listItem(
+                  tab: entry.value,
+                  focusNode: nodes[entry.key],
+                )).toList(),
+          ),
+        ));
   }
 
-  Widget _listItem({required _TabInfo tab}) {
+  void _selectTab(_TabInfo tab) {
+    final index = DesktopSettingPage.tabKeys.indexOf(tab.key);
+    if (index < 0) return;
+    if (selectedTab.value != tab.key) controller.jumpToPage(index);
+    selectedTab.value = tab.key;
+  }
+
+  Widget _listItem({required _TabInfo tab, required FocusNode focusNode}) {
     return Obx(() {
       bool selected = tab.key == selectedTab.value;
-      return SizedBox(
+      final item = SizedBox(
         width: _kTabWidth,
         height: _kTabHeight,
         child: InkWell(
+          focusNode: focusNode,
           onTap: () {
-            if (selectedTab.value != tab.key) {
-              int index = DesktopSettingPage.tabKeys.indexOf(tab.key);
-              if (index == -1) {
-                return;
-              }
-              controller.jumpToPage(index);
-            }
-            selectedTab.value = tab.key;
+            _selectTab(tab);
           },
           child: Row(children: [
             Container(
@@ -392,6 +401,13 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
             ),
           ]),
         ),
+      );
+      return Semantics(
+        container: true,
+        tab: true,
+        selected: selected,
+        onDidGainAccessibilityFocus: focusNode.requestFocus,
+        child: item,
       );
     });
   }
@@ -1793,7 +1809,7 @@ class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
       return Offstage();
     }
 
-    // Helper function to create network setting ListTiles
+    // Helper function to create network setting controls
     Widget listTile({
       required IconData icon,
       required String title,
@@ -1834,18 +1850,35 @@ class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
               style: TextStyle(fontSize: _kContentFontSize),
             );
 
-      return ListTile(
-        leading: Icon(icon, color: _accentColor),
-        title: titleWidget,
-        enabled: !locked,
-        onTap: onTap,
-        trailing: trailing,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
+      final content = Row(children: [
+        Icon(icon, color: _accentColor),
+        SizedBox(width: 10),
+        Expanded(child: titleWidget),
+        if (trailing != null) trailing,
+      ]);
+      if (onTap != null) {
+        return TextButton(
+          onPressed: locked ? null : onTap,
+          style: TextButton.styleFrom(
+            alignment: Alignment.centerLeft,
+            minimumSize: Size(double.infinity, 56),
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            foregroundColor: Theme.of(context).textTheme.bodyLarge?.color,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          child: content,
+        );
+      }
+      return MergeSemantics(
+        child: SizedBox(
+          height: 56,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: content,
+          ),
         ),
-        contentPadding: EdgeInsets.symmetric(horizontal: 16),
-        minLeadingWidth: 0,
-        horizontalTitleGap: 10,
       );
     }
 
@@ -2640,13 +2673,17 @@ Widget _Card(
                 Row(
                   children: [
                     Expanded(
+                      child: Semantics(
+                        header: true,
                         child: Text(
-                      translate(title),
-                      textAlign: TextAlign.start,
-                      style: const TextStyle(
-                        fontSize: _kTitleFontSize,
+                          translate(title),
+                          textAlign: TextAlign.start,
+                          style: const TextStyle(
+                            fontSize: _kTitleFontSize,
+                          ),
+                        ),
                       ),
-                    )),
+                    ),
                     ...?title_suffix
                   ],
                 ).marginOnly(left: _kContentHMargin, top: 10, bottom: 10),

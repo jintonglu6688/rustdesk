@@ -7,6 +7,7 @@ import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide TabBarTheme;
 import 'package:flutter_hbb/common.dart';
+import 'package:flutter_hbb/common/widgets/accessible_tab_navigation.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/pages/remote_page.dart';
 import 'package:flutter_hbb/desktop/pages/view_camera_page.dart';
@@ -156,15 +157,19 @@ class DesktopTabController {
     state.update((val) {
       if (val != null) {
         val.selected = index;
+        if (tabType == DesktopTabType.main && val.pageController.hasClients) {
+          val.pageController.jumpToPage(index);
+        }
         Future.delayed(Duration(milliseconds: 100), (() {
+          final targetIndex = tabType == DesktopTabType.main ? val.selected : index;
           if (val.pageController.hasClients) {
-            val.pageController.jumpToPage(index);
+            val.pageController.jumpToPage(targetIndex);
           }
           val.scrollController.itemCount = val.tabs.length;
           if (val.scrollController.hasClients &&
-              val.scrollController.itemCount > index) {
+              val.scrollController.itemCount > targetIndex) {
             val.scrollController
-                .scrollToItem(index, center: false, animate: true);
+                .scrollToItem(targetIndex, center: false, animate: true);
           }
         }));
       }
@@ -781,6 +786,8 @@ class WindowActionPanelState extends State<WindowActionPanel> {
               if (widget.showMinimize && !isMacOS)
                 ActionIcon(
                   message: 'Minimize',
+                  skipTraversal: isWindows &&
+                      widget.tabController.tabType == DesktopTabType.main,
                   icon: IconFont.min,
                   onTap: () {
                     if (widget.isMainWindow) {
@@ -793,6 +800,8 @@ class WindowActionPanelState extends State<WindowActionPanel> {
                 ),
               if (widget.showMaximize && !isMacOS)
                 Obx(() => ActionIcon(
+                      skipTraversal: isWindows &&
+                          widget.tabController.tabType == DesktopTabType.main,
                       message: stateGlobal.isMaximized.isTrue
                           ? 'Restore'
                           : 'Maximize',
@@ -807,6 +816,8 @@ class WindowActionPanelState extends State<WindowActionPanel> {
               if (widget.showClose && !isMacOS)
                 ActionIcon(
                   message: 'Close',
+                  skipTraversal: isWindows &&
+                      widget.tabController.tabType == DesktopTabType.main,
                   icon: IconFont.close,
                   onTap: () async {
                     final res = await widget.onClose?.call() ?? true;
@@ -977,7 +988,8 @@ class _ListView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Obx(() => ListView(
+    return Obx(() {
+      Widget buildList(List<FocusNode>? nodes) => ListView(
         controller: state.value.scrollController,
         scrollDirection: Axis.horizontal,
         shrinkWrap: true,
@@ -994,6 +1006,7 @@ class _ListView extends StatelessWidget {
                   key: ValueKey(tab.key),
                   onVisibilityChanged: onVisibilityChanged,
                   child: _Tab(
+                    focusNode: nodes?[index],
                     key: ValueKey(tab.key),
                     index: index,
                     tabInfoKey: tab.key,
@@ -1027,11 +1040,26 @@ class _ListView extends StatelessWidget {
                   onPanStart: (e) {},
                   child: child,
                 );
-              }).toList()));
+              }).toList());
+      if (controller.tabType != DesktopTabType.main || isHideSingleItem()) {
+        return buildList(null);
+      }
+      return AccessibleTabNavigation(
+        itemCount: state.value.tabs.length,
+        selectedIndex: state.value.selected,
+        direction: Axis.horizontal,
+        onSelected: (index) {
+          controller.jumpTo(index);
+          state.value.tabs[index].onTap?.call();
+        },
+        builder: buildList,
+      );
+    });
   }
 }
 
 class _Tab extends StatefulWidget {
+  final FocusNode? focusNode;
   final int index;
   final String tabInfoKey;
   final Rx<String> label;
@@ -1051,6 +1079,7 @@ class _Tab extends StatefulWidget {
 
   const _Tab({
     Key? key,
+    this.focusNode,
     required this.index,
     required this.tabInfoKey,
     required this.label,
@@ -1155,8 +1184,9 @@ class _TabState extends State<_Tab> with RestorationMixin {
     bool showDivider =
         widget.index != widget.selected - 1 && widget.index != widget.selected;
     RxBool hover = restoreHover.value.obs;
-    return Ink(
+    final tab = Ink(
       child: InkWell(
+        focusNode: widget.focusNode,
         onHover: (value) {
           hover.value = value;
           restoreHover.value = value;
@@ -1208,6 +1238,15 @@ class _TabState extends State<_Tab> with RestorationMixin {
             )),
       ),
     );
+    return widget.tabType == DesktopTabType.main
+        ? Semantics(
+            container: true,
+            tab: true,
+            selected: isSelected,
+            onDidGainAccessibilityFocus: widget.focusNode?.requestFocus,
+            child: tab,
+          )
+        : tab;
   }
 
   @override
@@ -1258,6 +1297,7 @@ class _CloseButton extends StatelessWidget {
 }
 
 class ActionIcon extends StatefulWidget {
+  final bool skipTraversal;
   final String? message;
   final IconData icon;
   final GestureTapCallback? onTap;
@@ -1268,6 +1308,7 @@ class ActionIcon extends StatefulWidget {
 
   const ActionIcon(
       {Key? key,
+      this.skipTraversal = false,
       this.message,
       required this.icon,
       this.onTap,
@@ -1286,7 +1327,7 @@ class _ActionIconState extends State<ActionIcon> {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
+    final icon = Tooltip(
       message: widget.message != null ? translate(widget.message!) : "",
       waitDuration: const Duration(seconds: 1),
       child: InkWell(
@@ -1317,6 +1358,14 @@ class _ActionIconState extends State<ActionIcon> {
         ),
       ),
     );
+    final namedIcon =
+        Semantics(button: true, enabled: widget.onTap != null, child: icon);
+    return widget.skipTraversal
+        ? FocusTraversalGroup(
+            descendantsAreTraversable: false,
+            child: namedIcon,
+          )
+        : namedIcon;
   }
 }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/common.dart';
+import 'package:flutter_hbb/common/widgets/focus_aware_offstage.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_home_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_setting_page.dart';
@@ -96,23 +97,27 @@ class _DesktopTabPageState extends State<DesktopTabPage> {
             backgroundColor: Theme.of(context).colorScheme.background,
             body: DesktopTab(
               controller: tabController,
-              tail: Offstage(
-                offstage: bind.isIncomingOnly() || bind.isDisableSettings(),
-                child: ActionIcon(
-                  message: 'Settings',
-                  icon: IconFont.menu,
-                  onTap: DesktopTabPage.onAddSetting,
-                  isClose: false,
-                ),
-              ),
+              tail: Obx(() => FocusAwareOffstage(
+                    offstage: tabController.state.value.tabs.any(
+                            (tab) => tab.key == kTabLabelSettingPage) ||
+                        bind.isIncomingOnly() || bind.isDisableSettings(),
+                    child: ActionIcon(
+                      message: 'Settings',
+                      icon: IconFont.menu,
+                      onTap: DesktopTabPage.onAddSetting,
+                      isClose: false,
+                    ),
+                  )),
             )));
+    final orderedTabs = FocusTraversalGroup(
+        policy: WidgetOrderTraversalPolicy(), child: tabWidget);
     return isMacOS || kUseCompatibleUiMode
-        ? tabWidget
+        ? orderedTabs
         : Obx(
             () => DragToResizeArea(
               resizeEdgeSize: stateGlobal.resizeEdgeSize.value,
               enableResizeEdges: windowManagerEnableResizeEdges,
-              child: tabWidget,
+              child: orderedTabs,
             ),
           );
   }

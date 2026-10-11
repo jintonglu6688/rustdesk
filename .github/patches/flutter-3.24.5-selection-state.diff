@@ -1,8 +1,111 @@
+diff --git a/packages/flutter/lib/src/rendering/proxy_box.dart b/packages/flutter/lib/src/rendering/proxy_box.dart
+index 49670a3aa60..b996b82f240 100644
+--- a/packages/flutter/lib/src/rendering/proxy_box.dart
++++ b/packages/flutter/lib/src/rendering/proxy_box.dart
+@@ -4314,6 +4314,15 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
+     if (_properties.button != null) {
+       config.isButton = _properties.button!;
+     }
++    if (_properties.tab != null) {
++      config.isTab = _properties.tab!;
++    }
++    if (_properties.tabBar != null) {
++      config.isTabBar = _properties.tabBar!;
++    }
++    if (_properties.verticalTabBar != null) {
++      config.isVerticalTabBar = _properties.verticalTabBar!;
++    }
+     if (_properties.expanded != null) {
+       config.isExpanded = _properties.expanded;
+     }
 diff --git a/packages/flutter/lib/src/semantics/semantics.dart b/packages/flutter/lib/src/semantics/semantics.dart
+index e8f4969e6aa..c0e98859ae2 100644
 --- a/packages/flutter/lib/src/semantics/semantics.dart
 +++ b/packages/flutter/lib/src/semantics/semantics.dart
-@@ -4631,3 +4631,4 @@
+@@ -907,6 +907,9 @@ class SemanticsProperties extends DiagnosticableTree {
+     this.selected,
+     this.toggled,
+     this.button,
++    this.tab,
++    this.tabBar,
++    this.verticalTabBar,
+     this.link,
+     this.header,
+     this.headingLevel,
+@@ -1030,6 +1033,15 @@ class SemanticsProperties extends DiagnosticableTree {
+   /// is focused.
+   final bool? button;
+ 
++  /// Whether this node is an item in a Windows tab control.
++  final bool? tab;
++
++  /// Whether this node is a single-selection Windows tab control.
++  final bool? tabBar;
++
++  /// Whether the tab control uses vertical navigation.
++  final bool? verticalTabBar;
++
+   /// If non-null, indicates that this subtree represents a link.
+   ///
+   /// iOS's VoiceOver provides users with a unique hint when a link is focused.
+@@ -1712,6 +1724,9 @@ class SemanticsProperties extends DiagnosticableTree {
+     properties.add(DiagnosticsProperty<bool>('mixed', mixed, defaultValue: null));
+     properties.add(DiagnosticsProperty<bool>('expanded', expanded, defaultValue: null));
+     properties.add(DiagnosticsProperty<bool>('selected', selected, defaultValue: null));
++    properties.add(DiagnosticsProperty<bool>('tab', tab, defaultValue: null));
++    properties.add(DiagnosticsProperty<bool>('tabBar', tabBar, defaultValue: null));
++    properties.add(DiagnosticsProperty<bool>('verticalTabBar', verticalTabBar, defaultValue: null));
+     properties.add(StringProperty('identifier', identifier, defaultValue: null));
+     properties.add(StringProperty('label', label, defaultValue: null));
+     properties.add(AttributedStringProperty('attributedLabel', attributedLabel, defaultValue: null));
+@@ -4630,6 +4645,7 @@ class SemanticsConfiguration {
+   /// in which case it will not be flagged as selected.
    bool get isSelected => _hasFlag(SemanticsFlag.isSelected);
    set isSelected(bool value) {
 +    _setFlag(SemanticsFlag.hasSelectedState, true);
      _setFlag(SemanticsFlag.isSelected, value);
+   }
+ 
+@@ -4741,6 +4757,18 @@ class SemanticsConfiguration {
+     _setFlag(SemanticsFlag.isButton, value);
+   }
+ 
++  /// Whether the node is a Windows tab item.
++  bool get isTab => _hasFlag(SemanticsFlag.isTab);
++  set isTab(bool value) { _setFlag(SemanticsFlag.isTab, value); }
++
++  /// Whether the node is a Windows tab control.
++  bool get isTabBar => _hasFlag(SemanticsFlag.isTabBar);
++  set isTabBar(bool value) { _setFlag(SemanticsFlag.isTabBar, value); }
++
++  /// Whether the tab control is vertical.
++  bool get isVerticalTabBar => _hasFlag(SemanticsFlag.isVerticalTabBar);
++  set isVerticalTabBar(bool value) { _setFlag(SemanticsFlag.isVerticalTabBar, value); }
++
+   /// Whether the owning [RenderObject] is a link (true) or not (false).
+   bool get isLink => _hasFlag(SemanticsFlag.isLink);
+   set isLink(bool value) {
+diff --git a/packages/flutter/lib/src/widgets/basic.dart b/packages/flutter/lib/src/widgets/basic.dart
+index 766ce54e05f..90040f1606d 100644
+--- a/packages/flutter/lib/src/widgets/basic.dart
++++ b/packages/flutter/lib/src/widgets/basic.dart
+@@ -7097,6 +7097,9 @@ class Semantics extends SingleChildRenderObjectWidget {
+     bool? selected,
+     bool? toggled,
+     bool? button,
++    bool? tab,
++    bool? tabBar,
++    bool? verticalTabBar,
+     bool? slider,
+     bool? keyboardKey,
+     bool? link,
+@@ -7169,6 +7172,9 @@ class Semantics extends SingleChildRenderObjectWidget {
+       toggled: toggled,
+       selected: selected,
+       button: button,
++      tab: tab,
++      tabBar: tabBar,
++      verticalTabBar: verticalTabBar,
+       slider: slider,
+       keyboardKey: keyboardKey,
+       link: link,

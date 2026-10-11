@@ -11,52 +11,110 @@ index 4de83fb..60be379 100644
  
  namespace fml {
 diff --git a/lib/ui/semantics.dart b/lib/ui/semantics.dart
-index 57bc1fa..747ef25 100644
+index 57bc1fa..8afecbb 100644
 --- a/lib/ui/semantics.dart
 +++ b/lib/ui/semantics.dart
-@@ -335,6 +335,7 @@ class SemanticsFlag {
+@@ -335,6 +335,10 @@ class SemanticsFlag {
    static const int _kIsCheckStateMixedIndex = 1 << 25;
    static const int _kHasExpandedStateIndex = 1 << 26;
    static const int _kIsExpandedIndex = 1 << 27;
 +  static const int _kHasSelectedStateIndex = 1 << 28;
++  static const int _kIsTabIndex = 1 << 29;
++  static const int _kIsTabBarIndex = 1 << 30;
++  static const int _kIsVerticalTabBarIndex = 1 << 31;
    // READ THIS: if you add a flag here, you MUST update the numSemanticsFlags
    // value in testing/dart/semantics_test.dart and
    // lib/web_ui/test/engine/semantics/semantics_api_test.dart, or tests will
-@@ -601,6 +602,9 @@ class SemanticsFlag {
+@@ -601,6 +605,18 @@ class SemanticsFlag {
    ///   * [SemanticsFlag.hasExpandedState], which enables an expanded/collapsed state.
    static const SemanticsFlag isExpanded = SemanticsFlag._(_kIsExpandedIndex, 'isExpanded');
  
 +  /// Whether the node has a selected state.
 +  static const SemanticsFlag hasSelectedState = SemanticsFlag._(_kHasSelectedStateIndex, 'hasSelectedState');
 +
++  /// Whether the node is a tab item.
++  static const SemanticsFlag isTab = SemanticsFlag._(_kIsTabIndex, 'isTab');
++
++  /// Whether the node is a single-selection tab control.
++  static const SemanticsFlag isTabBar = SemanticsFlag._(_kIsTabBarIndex, 'isTabBar');
++
++  /// Whether the tab control is vertical.
++  static const SemanticsFlag isVerticalTabBar = SemanticsFlag._(_kIsVerticalTabBarIndex, 'isVerticalTabBar');
++
    /// The possible semantics flags.
    ///
    /// The map's key is the [index] of the flag and the value is the flag itself.
-@@ -633,6 +637,7 @@ class SemanticsFlag {
+@@ -633,6 +649,10 @@ class SemanticsFlag {
      _kIsCheckStateMixedIndex: isCheckStateMixed,
      _kHasExpandedStateIndex: hasExpandedState,
      _kIsExpandedIndex: isExpanded,
 +    _kHasSelectedStateIndex: hasSelectedState,
++    _kIsTabIndex: isTab,
++    _kIsTabBarIndex: isTabBar,
++    _kIsVerticalTabBarIndex: isVerticalTabBar,
    };
  
    static List<SemanticsFlag> get values => _kFlagById.values.toList(growable: false);
 diff --git a/lib/ui/semantics/semantics_node.h b/lib/ui/semantics/semantics_node.h
-index c27ac35..388d049 100644
+index c27ac35..1c6f504 100644
 --- a/lib/ui/semantics/semantics_node.h
 +++ b/lib/ui/semantics/semantics_node.h
-@@ -91,6 +91,7 @@ enum class SemanticsFlags : int32_t {
+@@ -91,6 +91,10 @@ enum class SemanticsFlags : int32_t {
    kIsCheckStateMixed = 1 << 25,
    kHasExpandedState = 1 << 26,
    kIsExpanded = 1 << 27,
 +  kHasSelectedState = 1 << 28,
++  kIsTab = 1 << 29,
++  kIsTabBar = 1 << 30,
++  kIsVerticalTabBar = (-2147483647 - 1),
  };
  
  const int kScrollableSemanticsFlags =
 diff --git a/shell/platform/common/accessibility_bridge.cc b/shell/platform/common/accessibility_bridge.cc
-index 9a6e020..872cce1 100644
+index 9a6e020..87156bf 100644
 --- a/shell/platform/common/accessibility_bridge.cc
 +++ b/shell/platform/common/accessibility_bridge.cc
-@@ -366,7 +366,7 @@ void AccessibilityBridge::SetStateFromFlutterUpdate(ui::AXNodeData& node_data,
+@@ -301,6 +301,14 @@ void AccessibilityBridge::ConvertFlutterUpdate(const SemanticsNode& node,
+ void AccessibilityBridge::SetRoleFromFlutterUpdate(ui::AXNodeData& node_data,
+                                                    const SemanticsNode& node) {
+   FlutterSemanticsFlag flags = node.flags;
++  if (flags & kFlutterSemanticsFlagIsTab) {
++    node_data.role = ax::mojom::Role::kTab;
++    return;
++  }
++  if (flags & kFlutterSemanticsFlagIsTabBar) {
++    node_data.role = ax::mojom::Role::kTabList;
++    return;
++  }
+   if (flags & FlutterSemanticsFlag::kFlutterSemanticsFlagIsButton) {
+     node_data.role = ax::mojom::Role::kButton;
+     return;
+@@ -340,6 +348,11 @@ void AccessibilityBridge::SetRoleFromFlutterUpdate(ui::AXNodeData& node_data,
+     node_data.role = ax::mojom::Role::kSlider;
+     return;
+   }
++  if (flags & kFlutterSemanticsFlagHasImplicitScrolling &&
++      node.scroll_child_count > 0) {
++    node_data.role = ax::mojom::Role::kList;
++    return;
++  }
+   // If the state cannot be derived from the flutter flags, we fallback to group
+   // or static text.
+   if (node.children_in_traversal_order.empty()) {
+@@ -353,6 +366,12 @@ void AccessibilityBridge::SetStateFromFlutterUpdate(ui::AXNodeData& node_data,
+                                                     const SemanticsNode& node) {
+   FlutterSemanticsFlag flags = node.flags;
+   FlutterSemanticsAction actions = node.actions;
++  if (flags & kFlutterSemanticsFlagIsTabBar) {
++    node_data.AddState(ax::mojom::State::kRequired);
++    node_data.AddState(flags & kFlutterSemanticsFlagIsVerticalTabBar
++                           ? ax::mojom::State::kVertical
++                           : ax::mojom::State::kHorizontal);
++  }
+   if (flags & FlutterSemanticsFlag::kFlutterSemanticsFlagHasExpandedState &&
+       flags & FlutterSemanticsFlag::kFlutterSemanticsFlagIsExpanded) {
+     node_data.AddState(ax::mojom::State::kExpanded);
+@@ -366,7 +385,7 @@ void AccessibilityBridge::SetStateFromFlutterUpdate(ui::AXNodeData& node_data,
    }
    if (node_data.role == ax::mojom::Role::kStaticText &&
        (actions & kHasScrollingAction) == 0 && node.value.empty() &&
@@ -65,7 +123,7 @@ index 9a6e020..872cce1 100644
      node_data.AddState(ax::mojom::State::kIgnored);
    } else {
      // kFlutterSemanticsFlagIsFocusable means a keyboard focusable, it is
-@@ -433,9 +433,11 @@ void AccessibilityBridge::SetBooleanAttributesFromFlutterUpdate(
+@@ -433,9 +452,11 @@ void AccessibilityBridge::SetBooleanAttributesFromFlutterUpdate(
    // TODO(chunhtai): figure out if there is a node that does not clip overflow.
    node_data.AddBoolAttribute(ax::mojom::BoolAttribute::kClipsChildren,
                               !node.children_in_traversal_order.empty());
@@ -81,23 +139,57 @@ index 9a6e020..872cce1 100644
        ax::mojom::BoolAttribute::kEditableRoot,
        flags & FlutterSemanticsFlag::kFlutterSemanticsFlagIsTextField &&
 diff --git a/shell/platform/embedder/embedder.h b/shell/platform/embedder/embedder.h
-index 069c813..b1483fc 100644
+index 069c813..0f5758e 100644
 --- a/shell/platform/embedder/embedder.h
 +++ b/shell/platform/embedder/embedder.h
-@@ -243,6 +243,8 @@ typedef enum {
+@@ -243,6 +243,14 @@ typedef enum {
    kFlutterSemanticsFlagHasExpandedState = 1 << 26,
    /// Whether a semantic node that hasExpandedState is currently expanded.
    kFlutterSemanticsFlagIsExpanded = 1 << 27,
 +  /// Whether the node has a selected state.
 +  kFlutterSemanticsFlagHasSelectedState = 1 << 28,
++  /// Whether the node is a tab item.
++  kFlutterSemanticsFlagIsTab = 1 << 29,
++  /// Whether the node is a single-selection tab control.
++  kFlutterSemanticsFlagIsTabBar = 1 << 30,
++  /// Bit 31, expressed as signed int32 to match the semantics wire format.
++  kFlutterSemanticsFlagIsVerticalTabBar = (-2147483647 - 1),
  } FlutterSemanticsFlag;
  
  typedef enum {
+diff --git a/shell/platform/windows/accessibility_bridge_windows.cc b/shell/platform/windows/accessibility_bridge_windows.cc
+index 3c8ee21..da358ea 100644
+--- a/shell/platform/windows/accessibility_bridge_windows.cc
++++ b/shell/platform/windows/accessibility_bridge_windows.cc
+@@ -85,6 +85,14 @@ void AccessibilityBridgeWindows::OnAccessibilityEvent(
+                                     ax::mojom::Event::kScrollPositionChanged);
+       break;
+     case ui::AXEventGenerator::Event::SELECTED_CHANGED:
++      if (ax_node->data().role == ax::mojom::Role::kTab) {
++        DispatchWinAccessibilityEvent(
++            win_delegate,
++            ax_node->data().GetBoolAttribute(ax::mojom::BoolAttribute::kSelected)
++                ? ax::mojom::Event::kSelection
++                : ax::mojom::Event::kSelectionRemove);
++        break;
++      }
+       DispatchWinAccessibilityEvent(win_delegate,
+                                     ax::mojom::Event::kValueChanged);
+       break;
 diff --git a/shell/platform/windows/accessibility_bridge_windows_unittests.cc b/shell/platform/windows/accessibility_bridge_windows_unittests.cc
-index f2244bb..af9fb57 100644
+index f2244bb..dbb7638 100644
 --- a/shell/platform/windows/accessibility_bridge_windows_unittests.cc
 +++ b/shell/platform/windows/accessibility_bridge_windows_unittests.cc
-@@ -115,6 +115,7 @@ std::unique_ptr<FlutterWindowsEngine> GetTestEngine() {
+@@ -7,6 +7,8 @@
+ #include <comdef.h>
+ #include <comutil.h>
+ #include <oleacc.h>
++#include <UIAutomation.h>
++#include <wrl/client.h>
+ 
+ #include <vector>
+ 
+@@ -115,6 +117,7 @@ std::unique_ptr<FlutterWindowsEngine> GetTestEngine() {
    auto engine = std::make_unique<FlutterWindowsEngine>(project);
  
    EngineModifier modifier(engine.get());
@@ -105,7 +197,7 @@ index f2244bb..af9fb57 100644
    modifier.embedder_api().UpdateSemanticsEnabled =
        [](FLUTTER_API_SYMBOL(FlutterEngine) engine, bool enabled) {
          return kSuccess;
-@@ -251,6 +252,87 @@ TEST(AccessibilityBridgeWindows, GetParent) {
+@@ -251,6 +254,263 @@ TEST(AccessibilityBridgeWindows, GetParent) {
              node1_delegate->GetParent());
  }
  
@@ -190,6 +282,182 @@ index f2244bb..af9fb57 100644
 +  }
 +}
 +
++TEST(AccessibilityBridgeWindows, IndexedScrollCollectionsExposeListRole) {
++  auto engine = GetTestEngine();
++  FlutterWindowsViewSpy view{
++      engine.get(), std::make_unique<NiceMock<MockWindowBindingHandler>>()};
++  EngineModifier modifier{engine.get()};
++  modifier.SetImplicitView(&view);
++  view.OnUpdateSemanticsEnabled(true);
++  auto bridge = view.accessibility_bridge().lock();
++  FlutterSemanticsNode2 node{sizeof(FlutterSemanticsNode2), 0};
++  const int32_t child_id = 1;
++  node.child_count = 1;
++  node.children_in_traversal_order = &child_id;
++  node.children_in_hit_test_order = &child_id;
++  node.rect = {0, 0, 100, 100};
++  node.transform = {1, 0, 0, 0, 1, 0, 0, 0, 1};
++  FlutterSemanticsNode2 child{sizeof(FlutterSemanticsNode2), child_id};
++  child.label = "Network";
++  child.flags = kFlutterSemanticsFlagIsButton;
++  child.rect = node.rect;
++  child.transform = node.transform;
++  bridge->AddFlutterSemanticsNodeUpdate(child);
++  const int states[][3] = {
++      {kFlutterSemanticsFlagHasImplicitScrolling, 3, ROLE_SYSTEM_LIST},
++      {0, 3, ROLE_SYSTEM_GROUPING},
++      {kFlutterSemanticsFlagHasImplicitScrolling, 0, ROLE_SYSTEM_GROUPING},
++      {kFlutterSemanticsFlagHasImplicitScrolling | kFlutterSemanticsFlagIsButton,
++       3, ROLE_SYSTEM_PUSHBUTTON}};
++  for (const auto& state : states) {
++    node.flags = static_cast<FlutterSemanticsFlag>(state[0]);
++    node.scroll_child_count = state[1];
++    bridge->AddFlutterSemanticsNodeUpdate(node);
++    bridge->CommitUpdates();
++    auto native = bridge->GetFlutterPlatformNodeDelegateFromID(0)
++                      .lock()
++                      ->GetNativeViewAccessible();
++    VARIANT self{}, role{};
++    self.vt = VT_I4;
++    self.lVal = CHILDID_SELF;
++    ASSERT_EQ(native->get_accRole(self, &role), S_OK);
++    ASSERT_EQ(role.vt, VT_I4);
++    EXPECT_EQ(role.lVal, state[2]);
++  }
++}
++
++TEST(AccessibilityBridgeWindows, TabControlExposesNativeSelection) {
++  auto engine = GetTestEngine();
++  FlutterWindowsViewSpy view{
++      engine.get(), std::make_unique<NiceMock<MockWindowBindingHandler>>()};
++  EngineModifier modifier{engine.get()};
++  modifier.SetImplicitView(&view);
++  view.OnUpdateSemanticsEnabled(true);
++  auto bridge = view.accessibility_bridge().lock();
++  FlutterSemanticsNode2 root{sizeof(FlutterSemanticsNode2), 0};
++  const int32_t scroll_id = 3;
++  root.child_count = 1;
++  root.children_in_traversal_order = &scroll_id;
++  root.children_in_hit_test_order = &scroll_id;
++  root.flags = kFlutterSemanticsFlagIsTabBar;
++  FlutterSemanticsNode2 scroll{sizeof(FlutterSemanticsNode2), 3};
++  const int32_t children[] = {1, 2};
++  scroll.child_count = 2;
++  scroll.children_in_traversal_order = children;
++  scroll.children_in_hit_test_order = children;
++  scroll.flags = kFlutterSemanticsFlagHasImplicitScrolling;
++  scroll.scroll_child_count = 2;
++  FlutterSemanticsNode2 first{sizeof(FlutterSemanticsNode2), 1};
++  first.label = "Home";
++  first.flags = static_cast<FlutterSemanticsFlag>(
++      kFlutterSemanticsFlagIsTab | kFlutterSemanticsFlagHasSelectedState |
++      kFlutterSemanticsFlagIsSelected);
++  first.actions = kFlutterSemanticsActionTap;
++  FlutterSemanticsNode2 second = first;
++  second.id = 2;
++  second.label = "Settings";
++  second.flags = static_cast<FlutterSemanticsFlag>(
++      kFlutterSemanticsFlagIsTab | kFlutterSemanticsFlagHasSelectedState);
++  bridge->AddFlutterSemanticsNodeUpdate(root);
++  bridge->AddFlutterSemanticsNodeUpdate(first);
++  bridge->AddFlutterSemanticsNodeUpdate(second);
++  bridge->AddFlutterSemanticsNodeUpdate(scroll);
++  bridge->CommitUpdates();
++
++  Microsoft::WRL::ComPtr<IRawElementProviderSimple> container, item;
++  ASSERT_EQ(bridge->GetFlutterPlatformNodeDelegateFromID(0).lock()
++                ->GetNativeViewAccessible()->QueryInterface(IID_PPV_ARGS(&container)), S_OK);
++  ASSERT_EQ(bridge->GetFlutterPlatformNodeDelegateFromID(2).lock()
++                ->GetNativeViewAccessible()->QueryInterface(IID_PPV_ARGS(&item)), S_OK);
++  VARIANT value{};
++  ASSERT_EQ(container->GetPropertyValue(UIA_ControlTypePropertyId, &value), S_OK);
++  EXPECT_EQ(value.lVal, UIA_TabControlTypeId);
++  ASSERT_EQ(item->GetPropertyValue(UIA_ControlTypePropertyId, &value), S_OK);
++  EXPECT_EQ(value.lVal, UIA_TabItemControlTypeId);
++  VARIANT self{}, role{};
++  self.vt = VT_I4;
++  self.lVal = CHILDID_SELF;
++  ASSERT_EQ(bridge->GetFlutterPlatformNodeDelegateFromID(2).lock()
++                ->GetNativeViewAccessible()->get_accRole(self, &role), S_OK);
++  EXPECT_EQ(role.lVal, ROLE_SYSTEM_PAGETAB);
++
++  Microsoft::WRL::ComPtr<IUnknown> pattern;
++  Microsoft::WRL::ComPtr<ISelectionProvider> selection;
++  ASSERT_EQ(container->GetPatternProvider(UIA_SelectionPatternId, &pattern), S_OK);
++  ASSERT_NE(pattern.Get(), nullptr);
++  ASSERT_EQ(pattern.As(&selection), S_OK);
++  BOOL state = FALSE;
++  ASSERT_EQ(selection->get_IsSelectionRequired(&state), S_OK);
++  EXPECT_TRUE(state);
++  ASSERT_EQ(selection->get_CanSelectMultiple(&state), S_OK);
++  EXPECT_FALSE(state);
++  pattern.Reset();
++  ASSERT_EQ(item->GetPatternProvider(UIA_InvokePatternId, &pattern), S_OK);
++  EXPECT_EQ(pattern.Get(), nullptr);
++  Microsoft::WRL::ComPtr<ISelectionItemProvider> selection_item;
++  ASSERT_EQ(item->GetPatternProvider(UIA_SelectionItemPatternId, &pattern), S_OK);
++  ASSERT_NE(pattern.Get(), nullptr);
++  ASSERT_EQ(pattern.As(&selection_item), S_OK);
++  ASSERT_EQ(selection_item->get_IsSelected(&state), S_OK);
++  EXPECT_FALSE(state);
++  Microsoft::WRL::ComPtr<IRawElementProviderSimple> owner;
++  ASSERT_EQ(selection_item->get_SelectionContainer(&owner), S_OK);
++  EXPECT_EQ(owner.Get(), container.Get());
++
++  uint64_t dispatched_id = 0;
++  modifier.embedder_api().DispatchSemanticsAction = MOCK_ENGINE_PROC(
++      DispatchSemanticsAction,
++      ([&dispatched_id](FLUTTER_API_SYMBOL(FlutterEngine) engine, uint64_t id,
++                       FlutterSemanticsAction action, const uint8_t* data,
++                       size_t data_length) {
++        EXPECT_EQ(action, kFlutterSemanticsActionTap);
++        dispatched_id = id;
++        return kSuccess;
++      }));
++  ASSERT_EQ(selection_item->Select(), S_OK);
++  EXPECT_EQ(dispatched_id, 2u);
++  auto spy = std::static_pointer_cast<AccessibilityBridgeWindowsSpy>(bridge);
++  spy->ResetRecords();
++  first.flags = second.flags;
++  second.flags = static_cast<FlutterSemanticsFlag>(
++      second.flags | kFlutterSemanticsFlagIsSelected);
++  bridge->AddFlutterSemanticsNodeUpdate(first);
++  bridge->AddFlutterSemanticsNodeUpdate(second);
++  bridge->CommitUpdates();
++  ASSERT_EQ(selection_item->get_IsSelected(&state), S_OK);
++  EXPECT_TRUE(state);
++  bool selected_event = false, removed_event = false;
++  for (const auto& event : spy->dispatched_events()) {
++    selected_event |= event.node_delegate->GetAXNode()->id() == 2 &&
++                      event.event_type == ax::mojom::Event::kSelection;
++    removed_event |= event.node_delegate->GetAXNode()->id() == 1 &&
++                     event.event_type == ax::mojom::Event::kSelectionRemove;
++  }
++  EXPECT_TRUE(selected_event);
++  EXPECT_TRUE(removed_event);
++  SAFEARRAY* selected_items = nullptr;
++  ASSERT_EQ(selection->GetSelection(&selected_items), S_OK);
++  ASSERT_NE(selected_items, nullptr);
++  LONG first_index = 0, last_index = -1;
++  ASSERT_EQ(SafeArrayGetUBound(selected_items, 1, &last_index), S_OK);
++  EXPECT_EQ(last_index, 0);
++  Microsoft::WRL::ComPtr<IUnknown> selected_item;
++  ASSERT_EQ(SafeArrayGetElement(selected_items, &first_index, selected_item.GetAddressOf()), S_OK);
++  Microsoft::WRL::ComPtr<IRawElementProviderSimple> selected_provider;
++  ASSERT_EQ(selected_item.As(&selected_provider), S_OK);
++  EXPECT_EQ(selected_provider.Get(), item.Get());
++  SafeArrayDestroy(selected_items);
++  for (bool vertical : {false, true}) {
++    root.flags = static_cast<FlutterSemanticsFlag>(
++        kFlutterSemanticsFlagIsTabBar |
++        (vertical ? kFlutterSemanticsFlagIsVerticalTabBar : 0));
++    bridge->AddFlutterSemanticsNodeUpdate(root);
++    bridge->CommitUpdates();
++    ASSERT_EQ(container->GetPropertyValue(UIA_OrientationPropertyId, &value), S_OK);
++    EXPECT_EQ(value.lVal, vertical ? OrientationType_Vertical : OrientationType_Horizontal);
++  }
++}
++
  TEST(AccessibilityBridgeWindows, GetParentOnRootRetunsNullptr) {
    auto engine = GetTestEngine();
    FlutterWindowsViewSpy view{
@@ -221,7 +489,7 @@ index 6962136..cb1799f 100644
    config.open_gl.present = [](void* user_data) -> bool { FML_UNREACHABLE(); };
    config.open_gl.fbo_reset_after_present = true;
 diff --git a/testing/dart/semantics_test.dart b/testing/dart/semantics_test.dart
-index 24c5bd1..74df7de 100644
+index 24c5bd1..69d1b48 100644
 --- a/testing/dart/semantics_test.dart
 +++ b/testing/dart/semantics_test.dart
 @@ -11,7 +11,7 @@ import 'package:litetest/litetest.dart';
@@ -229,7 +497,20 @@ index 24c5bd1..74df7de 100644
  void main() {
    // This must match the number of flags in lib/ui/semantics.dart
 -  const int numSemanticsFlags = 28;
-+  const int numSemanticsFlags = 29;
++  const int numSemanticsFlags = 32;
    test('SemanticsFlag.values refers to all flags.', () async {
      expect(SemanticsFlag.values.length, equals(numSemanticsFlags));
      for (int index = 0; index < numSemanticsFlags; ++index) {
+diff --git a/third_party/accessibility/ax/platform/ax_platform_node_win.cc b/third_party/accessibility/ax/platform/ax_platform_node_win.cc
+index 68bf577..f6b758a 100644
+--- a/third_party/accessibility/ax/platform/ax_platform_node_win.cc
++++ b/third_party/accessibility/ax/platform/ax_platform_node_win.cc
+@@ -5553,7 +5553,7 @@ AXPlatformNodeWin::GetPatternProviderFactoryMethod(PATTERNID pattern_id) {
+       break;
+ 
+     case UIA_InvokePatternId:
+-      if (data.IsInvocable()) {
++      if (data.role != ax::mojom::Role::kTab && data.IsInvocable()) {
+         return &PatternProvider<IInvokeProvider>;
+       }
+       break;

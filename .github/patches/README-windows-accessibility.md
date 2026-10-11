@@ -2,7 +2,7 @@
 
 Use Flutter SDK 3.24.5 with Flutter engine 3.24.4 (`db49896cf25ceabc44096d5f088d86414e05a7aa`), matching RustDesk's Windows engine release build. Do not apply these changes to a newer SDK or reuse the old engine DLL.
 
-`flutter-engine-3.24.4-accessibility.diff` adds a distinct `hasSelectedState` flag, only exposes Windows selection state when declared, keeps tooltip-only controls in the accessibility tree, and excludes ignored leaves from Windows accessibility hit testing. It includes RustDesk's existing `ClearCurrent` and `hex_codec.h` build compatibility changes. Apply it to a clean engine checkout after syncing dependencies:
+`flutter-engine-3.24.4-accessibility.diff` adds a distinct `hasSelectedState` flag, only exposes Windows selection state when declared, keeps tooltip-only controls in the accessibility tree, and excludes ignored leaves from Windows accessibility hit testing. It also exposes indexed scroll collections with implicit scrolling and a positive item count as lists, preserving explicit control roles and leaving ordinary scroll containers and the default PageView as groups. It includes RustDesk's existing `ClearCurrent` and `hex_codec.h` build compatibility changes. Apply it to a clean engine checkout after syncing dependencies:
 
 ```powershell
 git -C $engineSource apply E:\rustdesk\.github\patches\flutter-engine-3.24.4-accessibility.diff
@@ -13,6 +13,10 @@ ninja -C .\out\host_release flutter_windows flutter_windows_unittests
 ```
 
 Apply `flutter-3.24.5-selection-state.diff` to the Flutter SDK root. The matching engine's `lib/ui/semantics.dart` and rebuilt platform kernel artifacts must also replace the SDK's cached UI declarations and patched SDK artifacts. Updating only the Dart source in `bin/cache/pkg/sky_engine` does not update the compiled platform kernel.
+
+The paired patches also expose explicit `Semantics(tab: true)` and `Semantics(tabBar: true, verticalTabBar: ...)` annotations for the Windows settings navigation. They use bits 29-31 after the selected-state bit; bit 31 is represented as signed int32 in the native declarations. The Windows bridge maps these annotations to native Tab/TabItem roles, single-selection providers, orientation, and selection events. Tab items expose SelectionItem rather than Invoke. Other existing control roles and events retain their previous mappings. These annotations are specific to this patched SDK/Windows engine pair; they are not a claim of support in stock Flutter 3.24.5 or the web engine.
+
+RustDesk's main page tabs use Left/Right and its setting categories use Up/Down, with Home/End and wrapping at either end. Only the selected item participates in Tab traversal; arrow keys select the page while focus stays in the tab control. Accessibility focus requests focus the item without selecting it. Main-page selection is applied immediately to prevent the old delayed page switch from putting Tab into the previous page. The separate Settings opener is hidden and excluded from focus when the Settings tab exists, and is restored when that tab is closed. The Windows main window's minimize/maximize/restore/close buttons retain their accessible actions and mouse behavior but leave Tab traversal; Alt+Space remains the keyboard entry point for those window operations. Remote-session windows retain their existing keyboard behavior.
 
 ```powershell
 $sdk = 'D:\Dev\SDKs\Flutter-3.24.5\flutter'

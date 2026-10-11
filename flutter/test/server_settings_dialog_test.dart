@@ -3,6 +3,26 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_hbb/mobile/widgets/dialog.dart';
 
 void main() {
+  testWidgets('desktop server fields retain names without visible inner labels',
+      (tester) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    for (final label in ['ID Server', 'Relay Server', 'API Server', 'Key']) {
+      await tester.pumpWidget(MaterialApp(
+        home: Material(child: serverSettingsTextFormField(
+          label: label,
+          controller: controller,
+          errorMsg: '',
+          showLabelText: false,
+          autofocus: true,
+        )),
+      ));
+      expect(tester.getSemantics(find.byType(TextField)).getSemanticsData().label,
+          label);
+    }
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, semanticsEnabled: true);
+
   testWidgets('server settings text fields preserve literal input',
       (tester) async {
     final controller = TextEditingController(text: 'AbCdR1c1E=');

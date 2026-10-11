@@ -1,10 +1,26 @@
 import 'dart:ui' show SemanticsAction, SemanticsFlag;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/common/widgets/peer_tab_page.dart';
+import 'package:flutter_hbb/desktop/widgets/tabbar_widget.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('window actions expose their button role', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      theme: MyTheme.lightTheme,
+      home: Material(child: Tooltip(
+        message: 'Settings',
+        child: ActionIcon(icon: Icons.settings, onTap: () {}),
+      )),
+    ));
+    final data = tester.getSemantics(find.byType(ActionIcon)).getSemanticsData();
+    expect(data.hasFlag(SemanticsFlag.isButton), isTrue);
+    expect(data.tooltip, 'Settings');
+    expect(data.hasAction(SemanticsAction.tap), isTrue);
+  }, semanticsEnabled: true);
+
   testWidgets('peer refresh exposes a named button', (tester) async {
     await tester.pumpWidget(MaterialApp(
       home: Material(
