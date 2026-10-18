@@ -9,6 +9,7 @@ import 'package:flutter_hbb/common/widgets/focus_aware_offstage.dart';
 import 'package:flutter_hbb/common/widgets/connection_page_title.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/widgets/popup_menu.dart';
+import 'package:flutter_hbb/desktop/widgets/cm_access_key.dart';
 import 'package:flutter_hbb/models/state_model.dart';
 import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher_string.dart';
@@ -413,34 +414,42 @@ class _ConnectionPageState extends State<ConnectionPage>
                   ) {
                     updateTextAndPreserveSelection(
                         fieldTextEditingController, _idController.text);
-                    return TextField(
-                      autocorrect: false,
-                      enableSuggestions: false,
-                      keyboardType: TextInputType.visiblePassword,
-                      focusNode: fieldFocusNode,
-                      style: const TextStyle(
-                        fontFamily: 'WorkSans',
-                        fontSize: 22,
-                        height: 1.4,
-                      ),
-                      maxLines: 1,
-                      cursorColor:
-                          Theme.of(context).textTheme.titleLarge?.color,
-                      decoration: InputDecoration(
-                          filled: false,
-                          counterText: '',
-                          labelText: translate('Enter Remote ID'),
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 15, vertical: 13)),
-                      controller: fieldTextEditingController,
-                      inputFormatters: [IDTextInputFormatter()],
-                      onChanged: (v) {
-                        _idController.id = v;
-                      },
-                      onSubmitted: (_) {
-                        onConnect();
-                      },
-                    ).workaroundFreezeLinuxMint();
+                    return CmAccessKey(
+                        action: 'Enter Remote ID',
+                        focusNode: fieldFocusNode,
+                        onInvoke: (_) {},
+                        builder: (_) => Semantics(
+                            hint: cmAccessKeyHint('Enter Remote ID'),
+                            child: TextField(
+                              autocorrect: false,
+                              enableSuggestions: false,
+                              keyboardType: TextInputType.visiblePassword,
+                              focusNode: fieldFocusNode,
+                              style: const TextStyle(
+                                fontFamily: 'WorkSans',
+                                fontSize: 22,
+                                height: 1.4,
+                              ),
+                              maxLines: 1,
+                              cursorColor:
+                                  Theme.of(context).textTheme.titleLarge?.color,
+                              decoration: InputDecoration(
+                                  filled: false,
+                                  counterText: '',
+                                  label: Text.rich(cmAccessKeyLabel(
+                                      translate('Enter Remote ID'),
+                                      'Enter Remote ID')),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 15, vertical: 13)),
+                              controller: fieldTextEditingController,
+                              inputFormatters: [IDTextInputFormatter()],
+                              onChanged: (v) {
+                                _idController.id = v;
+                              },
+                              onSubmitted: (_) {
+                                onConnect();
+                              },
+                            ))).workaroundFreezeLinuxMint();
                   },
                   onSelected: (option) {
                     setState(() {
@@ -517,11 +526,12 @@ class _ConnectionPageState extends State<ConnectionPage>
               child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                 SizedBox(
                   height: 28.0,
-                  child: ElevatedButton(
+                  child: cmAccessKeyButton(
+                    'Connect',
+                    translate('Connect'),
                     onPressed: () {
                       onConnect();
                     },
-                    child: Text(translate("Connect")),
                   ),
                 ),
                 const SizedBox(width: 8),

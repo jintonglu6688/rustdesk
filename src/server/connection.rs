@@ -3288,9 +3288,7 @@ impl Connection {
                         return true;
                     }
                     if self.peer_keyboard_enabled() {
-                        if is_enter(&me) {
-                            CLICK_TIME.store(get_time(), Ordering::SeqCst);
-                        }
+                        record_cm_keyboard_input(&me);
                         // https://github.com/rustdesk/rustdesk/issues/8633
                         MOUSE_MOVE_TIME.store(get_time(), Ordering::SeqCst);
 
@@ -7112,10 +7110,36 @@ fn wildcard_match(pattern: &str, text: &str) -> bool {
     pi == p.len()
 }
 
+fn record_cm_keyboard_input(event: &KeyEvent) {
+    // Windows CM is keyboard accessible: Space and mapped/translated keys can
+    // activate actions too. Keep the existing click-time guard for every key.
+    if cfg!(target_os = "windows") || is_enter(event) {
+        CLICK_TIME.store(get_time(), Ordering::SeqCst);
+    }
+}
+
 #[cfg(test)]
 mod test {
     #[allow(unused)]
     use super::*;
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn cm_guard_records_remote_keyboard_input_in_every_mode() {
+        for mode in [KeyboardMode::Legacy, KeyboardMode::Map, KeyboardMode::Translate] {
+            for key in [32, 57, 13, 9] {
+                let mut event = KeyEvent::new();
+                event.mode = mode.into();
+                event.set_chr(key);
+                for down in [true, false] {
+                    event.down = down;
+                    CLICK_TIME.store(0, Ordering::SeqCst);
+                    record_cm_keyboard_input(&event);
+                    assert!(CLICK_TIME.load(Ordering::SeqCst) > 0, "remote mode {mode:?}, key {key}, down {down} was not guarded");
+                }
+            }
+        }
+    }
 
     // The registry is process-global and the harness runs tests in parallel threads, so every
     // test that admits connections holds this first; a poisoned lock is still a lock.

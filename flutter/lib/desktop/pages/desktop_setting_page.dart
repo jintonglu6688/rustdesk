@@ -14,6 +14,7 @@ import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_home_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_tab_page.dart';
 import 'package:flutter_hbb/desktop/widgets/remote_toolbar.dart';
+import 'package:flutter_hbb/desktop/widgets/cm_access_key.dart';
 import 'package:flutter_hbb/mobile/widgets/dialog.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/models/printer_model.dart';
@@ -392,8 +393,8 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
               color: selected ? _accentColor : null,
               size: 20,
             ).marginOnly(left: 13, right: 10),
-            Text(
-              translate(tab.label),
+            Text.rich(
+              cmAccessKeyLabel(translate(tab.label), tab.label),
               style: TextStyle(
                   color: selected ? _accentColor : null,
                   fontWeight: FontWeight.w400,
@@ -402,13 +403,17 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
           ]),
         ),
       );
-      return Semantics(
-        container: true,
-        tab: true,
-        selected: selected,
-        onDidGainAccessibilityFocus: focusNode.requestFocus,
-        child: item,
-      );
+      return CmAccessKey(
+          action: tab.label,
+          focusNode: focusNode,
+          builder: (_) => Semantics(
+                container: true,
+                tab: true,
+                hint: cmAccessKeyHint(tab.label),
+                selected: selected,
+                onDidGainAccessibilityFocus: focusNode.requestFocus,
+                child: item,
+              ));
     });
   }
 }
@@ -1845,8 +1850,8 @@ class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
                 ),
               ],
             )
-          : Text(
-              translate(title),
+          : Text.rich(
+              cmAccessKeyLabel(translate(title), title),
               style: TextStyle(fontSize: _kContentFontSize),
             );
 
@@ -1857,19 +1862,26 @@ class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
         if (trailing != null) trailing,
       ]);
       if (onTap != null) {
-        return TextButton(
-          onPressed: locked ? null : onTap,
-          style: TextButton.styleFrom(
-            alignment: Alignment.centerLeft,
-            minimumSize: Size(double.infinity, 56),
-            padding: EdgeInsets.symmetric(horizontal: 16),
-            foregroundColor: Theme.of(context).textTheme.bodyLarge?.color,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-          child: content,
-        );
+        return CmAccessKey(
+            action: title,
+            builder: (node) => MergeSemantics(child: Semantics(
+                button: true,
+                hint: cmAccessKeyHint(title),
+                child: TextButton(
+                  focusNode: node,
+                  onPressed: locked ? null : onTap,
+                  style: TextButton.styleFrom(
+                    alignment: Alignment.centerLeft,
+                    minimumSize: Size(double.infinity, 56),
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    foregroundColor:
+                        Theme.of(context).textTheme.bodyLarge?.color,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: content,
+                ))));
       }
       return MergeSemantics(
         child: SizedBox(
@@ -2969,14 +2981,17 @@ class _WaylandCardState extends State<WaylandCard> {
 // ignore: non_constant_identifier_names
 Widget _Button(String label, Function() onPressed,
     {bool enabled = true, String? tip, ButtonStyle? style}) {
-  var button = ElevatedButton(
-    onPressed: enabled ? onPressed : null,
-    child: Text(
-      translate(label),
-    ).marginSymmetric(horizontal: 15),
-    style: style,
-  );
-  StatefulWidget child;
+  final button = cmAccessKey(label) != null
+      ? cmAccessKeyButton(label, translate(label),
+          onPressed: enabled ? onPressed : null, style: style)
+      : ElevatedButton(
+          onPressed: enabled ? onPressed : null,
+          child: Text(
+            translate(label),
+          ).marginSymmetric(horizontal: 15),
+          style: style,
+        );
+  Widget child;
   if (tip == null) {
     child = button;
   } else {
@@ -2989,6 +3004,12 @@ Widget _Button(String label, Function() onPressed,
 
 // ignore: non_constant_identifier_names
 Widget _SubButton(String label, Function() onPressed, [bool enabled = true]) {
+  if (cmAccessKey(label) != null) {
+    return Row(children: [
+      cmAccessKeyButton(label, translate(label),
+          onPressed: enabled ? onPressed : null)
+    ]).marginOnly(left: _kContentHSubMargin);
+  }
   return Row(
     children: [
       ElevatedButton(
@@ -3031,30 +3052,39 @@ Widget _lock(
             child: SizedBox(
               width: _kCardFixedWidth,
               child: Card(
-                child: ElevatedButton(
-                  child: SizedBox(
-                      height: 25,
-                      child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(
-                              Icons.security_sharp,
-                              size: 20,
-                            ),
-                            Text(translate(label)).marginOnly(left: 5),
-                          ]).marginSymmetric(vertical: 2)),
-                  onPressed: () async {
-                    final unlockPin = bind.mainGetUnlockPin();
-                    if (unlockPin.isEmpty || isUnlockPinDisabled()) {
-                      bool checked = await callMainCheckSuperUserPermission();
-                      if (checked) {
-                        onUnlock();
-                      }
-                    } else {
-                      checkUnlockPinDialog(unlockPin, onUnlock);
-                    }
-                  },
-                ).marginSymmetric(horizontal: 2, vertical: 4),
+                child: CmAccessKey(
+                    action: label,
+                    builder: (node) => MergeSemantics(child: Semantics(
+                        button: true,
+                        hint: cmAccessKeyHint(label),
+                        child: ElevatedButton(
+                          focusNode: node,
+                          child: SizedBox(
+                              height: 25,
+                              child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(
+                                      Icons.security_sharp,
+                                      size: 20,
+                                    ),
+                                    Text.rich(cmAccessKeyLabel(
+                                            translate(label), label))
+                                        .marginOnly(left: 5),
+                                  ]).marginSymmetric(vertical: 2)),
+                          onPressed: () async {
+                            final unlockPin = bind.mainGetUnlockPin();
+                            if (unlockPin.isEmpty || isUnlockPinDisabled()) {
+                              bool checked =
+                                  await callMainCheckSuperUserPermission();
+                              if (checked) {
+                                onUnlock();
+                              }
+                            } else {
+                              checkUnlockPinDialog(unlockPin, onUnlock);
+                            }
+                          },
+                        )))).marginSymmetric(horizontal: 2, vertical: 4),
               ).marginOnly(left: _kCardLeftMargin),
             ).marginOnly(top: 10),
           ),

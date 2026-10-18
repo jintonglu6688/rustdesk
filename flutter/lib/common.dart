@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common/formatter/id_formatter.dart';
 import 'package:flutter_hbb/desktop/widgets/refresh_wrapper.dart';
+import 'package:flutter_hbb/desktop/widgets/cm_access_key.dart';
 import 'package:flutter_hbb/desktop/widgets/tabbar_widget.dart';
 import 'package:flutter_hbb/main.dart';
 import 'package:flutter_hbb/models/peer_model.dart';
@@ -2979,6 +2980,33 @@ Widget dialogButton(String text,
     Widget? icon,
     TextStyle? style,
     ButtonStyle? buttonStyle}) {
+  if (isWindows) {
+    for (final action in const [
+      'OK',
+      'Cancel',
+      'Clear',
+      'Close',
+      'Retry',
+      'Connect',
+      'Connect via relay',
+      'Continue',
+      'Disconnect',
+      'Wait',
+      'Request Elevation'
+    ]) {
+      if (text == action || text == translate(action)) {
+        return cmAccessKeyButton(
+            action == 'Close' ? 'Close dialog' : action, translate(text),
+            onPressed: onPressed,
+            isOutline: isOutline,
+            icon: icon,
+            textStyle: style,
+            style: isOutline
+                ? null
+                : ElevatedButton.styleFrom(elevation: 0).merge(buttonStyle));
+      }
+    }
+  }
   if (isDesktop || isWebDesktop) {
     if (isOutline) {
       return icon == null

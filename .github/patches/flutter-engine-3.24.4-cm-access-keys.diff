@@ -1,0 +1,102 @@
+diff --git a/shell/platform/common/accessibility_bridge.cc b/shell/platform/common/accessibility_bridge.cc
+--- a/shell/platform/common/accessibility_bridge.cc
++++ b/shell/platform/common/accessibility_bridge.cc
+@@ -6,6 +6,8 @@
+ 
+ #include <functional>
+ #include <utility>
++
++#include "flutter/fml/build_config.h"
+ 
+ #include "flutter/third_party/accessibility/ax/ax_tree_manager_map.h"
+ #include "flutter/third_party/accessibility/ax/ax_tree_update.h"
+@@ -543,6 +545,22 @@
+ void AccessibilityBridge::SetNameFromFlutterUpdate(ui::AXNodeData& node_data,
+                                                    const SemanticsNode& node) {
+   node_data.SetName(node.label);
++#if defined(FML_OS_WIN)
++  // Flutter 3.24 has no access-key field. Controls use an exact Alt+letter hint;
++  // keep ordinary hints and non-interactive labels on the existing path.
++  if ((node_data.role == ax::mojom::Role::kButton ||
++       node_data.role == ax::mojom::Role::kCheckBox ||
++       node_data.role == ax::mojom::Role::kTextField ||
++       node_data.role == ax::mojom::Role::kTab) &&
++      node.hint.size() == 5 && node.hint.compare(0, 4, "Alt+") == 0 &&
++      node.hint[4] >= 'A' && node.hint[4] <= 'Z') {
++    node_data.AddStringAttribute(ax::mojom::StringAttribute::kAccessKey,
++                                node.hint);
++    // Chromium's MSAA provider reads kKeyShortcuts for accKeyboardShortcut.
++    node_data.AddStringAttribute(ax::mojom::StringAttribute::kKeyShortcuts,
++                                node.hint);
++  }
++#endif
+ }
+ 
+ void AccessibilityBridge::SetValueFromFlutterUpdate(ui::AXNodeData& node_data,
+diff --git a/shell/platform/windows/accessibility_bridge_windows_unittests.cc b/shell/platform/windows/accessibility_bridge_windows_unittests.cc
+--- a/shell/platform/windows/accessibility_bridge_windows_unittests.cc
++++ b/shell/platform/windows/accessibility_bridge_windows_unittests.cc
+@@ -282,6 +282,63 @@
+                   ->IsIgnored());
+   EXPECT_EQ(root_delegate->HitTestSync(10, 10),
+             root_delegate->GetNativeViewAccessible());
++}
++
++TEST(AccessibilityBridgeWindows, CmAccessKeysReachUiaAndMsaa) {
++  auto engine = GetTestEngine();
++  FlutterWindowsViewSpy view{
++      engine.get(), std::make_unique<NiceMock<MockWindowBindingHandler>>()};
++  EngineModifier modifier{engine.get()};
++  modifier.SetImplicitView(&view);
++  view.OnUpdateSemanticsEnabled(true);
++  auto bridge = view.accessibility_bridge().lock();
++  FlutterSemanticsNode2 node{sizeof(FlutterSemanticsNode2), 0};
++  node.label = "Accept";
++  node.rect = {0, 0, 100, 100};
++  node.transform = {1, 0, 0, 0, 1, 0, 0, 0, 1};
++  struct Case { int flags; const char* hint; const wchar_t* expected; };
++  const Case cases[] = {
++      {kFlutterSemanticsFlagIsButton, "Alt+A", L"Alt+A"},
++      {kFlutterSemanticsFlagHasCheckedState | kFlutterSemanticsFlagIsChecked,
++       "Alt+K", L"Alt+K"},
++      {kFlutterSemanticsFlagIsTextField, "Alt+I", L"Alt+I"},
++      {kFlutterSemanticsFlagIsTab | kFlutterSemanticsFlagHasSelectedState,
++       "Alt+N", L"Alt+N"},
++      {kFlutterSemanticsFlagIsButton, "", nullptr},
++      {kFlutterSemanticsFlagIsButton, "Alt+A extra", nullptr},
++      {0, "Alt+A", nullptr}};
++  for (const auto& item : cases) {
++    node.flags = static_cast<FlutterSemanticsFlag>(item.flags);
++    node.hint = item.hint;
++    bridge->AddFlutterSemanticsNodeUpdate(node);
++    bridge->CommitUpdates();
++    auto native = bridge->GetFlutterPlatformNodeDelegateFromID(0)
++                      .lock()->GetNativeViewAccessible();
++    Microsoft::WRL::ComPtr<IRawElementProviderSimple> provider;
++    ASSERT_EQ(native->QueryInterface(IID_PPV_ARGS(&provider)), S_OK);
++    VARIANT access_key{};
++    ASSERT_EQ(provider->GetPropertyValue(UIA_AccessKeyPropertyId, &access_key), S_OK);
++    VARIANT self{};
++    self.vt = VT_I4;
++    self.lVal = CHILDID_SELF;
++    BSTR shortcut = nullptr;
++    const auto result = native->get_accKeyboardShortcut(self, &shortcut);
++    if (item.expected) {
++      ASSERT_EQ(access_key.vt, VT_BSTR);
++      EXPECT_STREQ(access_key.bstrVal, item.expected);
++      ASSERT_EQ(result, S_OK);
++      EXPECT_STREQ(shortcut, item.expected);
++      BSTR name = nullptr;
++      ASSERT_EQ(native->get_accName(self, &name), S_OK);
++      EXPECT_STREQ(name, L"Accept");
++      SysFreeString(name);
++    } else {
++      EXPECT_EQ(access_key.vt, VT_EMPTY);
++      EXPECT_EQ(result, S_FALSE);
++    }
++    SysFreeString(shortcut);
++    VariantClear(&access_key);
++  }
+ }
+ 
+ TEST(AccessibilityBridgeWindows, MsaaSelectionStateRequiresDeclaration) {

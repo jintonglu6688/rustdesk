@@ -10,16 +10,17 @@ import 'package:get/get.dart';
 import 'package:window_manager/window_manager.dart';
 
 final testClients = [
-  Client(0, false, false, false, "UserAAAAAA", "123123123", true, false, false),
-  Client(1, false, false, false, "UserBBBBB", "221123123", true, false, false),
-  Client(2, false, false, false, "UserC", "331123123", true, false, false),
-  Client(3, false, false, false, "UserDDDDDDDDDDDd", "441123123", true, false,
-      false)
+  Client(0, false, false, false, "待接受测试设备一", "123123123", true, false, false),
+  Client(1, false, false, false, "待接受测试设备二", "221123123", true, false, false),
+  Client(2, false, false, false, "待接受测试设备三", "331123123", true, false, false),
+  Client(3, true, false, false, "已连接测试设备", "441123123", true, false, false)
 ];
 
 /// flutter run -d {platform} -t test/cm_demo.dart to test cm
 void main() async {
   isTest = true;
+  kBootArgs = const [];
+  desktopType = DesktopType.cm;
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
   await windowManager.setSize(const Size(400, 600));
@@ -50,6 +51,7 @@ void main() async {
       size: kConnectionManagerWindowSizeClosedChat);
   windowManager.waitUntilReadyToShow(windowOptions, () async {
     await windowManager.show();
+    await windowManager.setTitle('RustDesk 无障碍模拟测试');
     // ensure initial window size to be changed
     await windowManager.setSize(kConnectionManagerWindowSizeClosedChat);
     await Future.wait([

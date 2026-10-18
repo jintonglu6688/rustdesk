@@ -6,6 +6,7 @@ Use Flutter SDK 3.24.5 with Flutter engine 3.24.4 (`db49896cf25ceabc44096d5f088d
 
 ```powershell
 git -C $engineSource apply E:\rustdesk\.github\patches\flutter-engine-3.24.4-accessibility.diff
+git -C $engineSource apply E:\rustdesk\.github\patches\flutter-engine-3.24.4-cm-access-keys.diff
 Set-Location (Split-Path $engineSource)
 python .\flutter\tools\gn --runtime-mode=release --enable-unittests
 ninja -C .\out\host_release flutter_windows flutter_windows_unittests
@@ -40,3 +41,29 @@ On this machine, `D:\Dev\Env\rustdesk-engine.ps1` selects the existing VS 2019 t
 Install the matching DLL and platform artifacts together before rebuilding RustDesk. Keep debug/test and release platform artifacts separate. These engine changes affect every control exposed through the Windows accessibility bridge; real selected/unselected states remain available. RustDesk's widget changes supply explicit button roles and category names, preventing visible icon buttons from being treated as empty ignored text.
 
 The Windows accessibility test helper mocks AOT mode alongside its existing embedder API mocks, so its dummy asset paths work in the release test build. Refreshing Flutter's artifact cache removes these custom artifacts; reinstall them before building this fork again.
+
+The separate CM access-key patch applies after the main engine patch. On Windows,
+button/checkbox/text-field/tab semantics with an exact `Alt+X` hint (one uppercase ASCII letter)
+expose that hint as UIA `AccessKey` and MSAA `accKeyboardShortcut`, using the
+existing Chromium provider. Other hints and roles keep their original mapping.
+This is the convention used by `CmAccessKey`, not a new stock Flutter API; it
+requires only the rebuilt Windows DLL/import library, with no additional Dart
+platform-kernel changes. `AccessibilityBridgeWindows.CmAccessKeysReachUiaAndMsaa`
+tests both native properties, invalid hints and clearing the shortcut.
+
+CM mnemonics use the same guarded callbacks as mouse actions, move focus to the
+control, ignore repeat events, and apply only to focusable controls in the active
+focus scope. Hidden/inactive session pages, disabled actions and covered dialog
+routes do not respond. Button labels underline the mnemonic; permission icons
+display the underlined letter. Alt+Space and Alt+F4 remain system operations.
+
+The same binding now covers the Windows home connection controls, settings
+categories and common settings actions, server fields, password prompts and
+standard dialog buttons. Settings options retain normal Tab/arrow navigation;
+ordinary switches and checkboxes do not each get an access key. Existing field
+and tab focus nodes retain their owner and lifecycle. Text-field mnemonics only
+focus the field; category mnemonics select and focus the category. Standard
+button semantics are merged so the name, role, action and shortcut share one
+native node. Locked settings and inactive pages remain excluded from focus and
+cannot respond to mnemonics. Main buttons use Alt+N to connect, while dialogs use
+Alt+O to confirm, Alt+C to cancel and Alt+X to close, avoiding same-dialog conflicts.

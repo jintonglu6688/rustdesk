@@ -550,9 +550,12 @@ class _DesktopTabState extends State<DesktopTab>
   List<Widget> _tabWidgets = [];
 
   Widget _focusablePage(TabInfo tab) {
-    if (tabType != DesktopTabType.main) return tab.page;
+    if (tabType != DesktopTabType.main && tabType != DesktopTabType.cm) {
+      return tab.page;
+    }
     return Obx(() => ExcludeFocus(
-          excluding: state.value.selectedTabInfo.key != tab.key,
+          excluding: state.value.tabs.isEmpty ||
+              state.value.selectedTabInfo.key != tab.key,
           child: tab.page,
         ));
   }
@@ -566,7 +569,7 @@ class _DesktopTabState extends State<DesktopTab>
               if (DesktopTabType.cm == tabType) {
                 // Fix when adding a new tab still showing closed tabs with the same peer id, which would happen after the DesktopTab was stateful.
                 return state.value.tabs.map((tab) {
-                  return tab.page;
+                  return _focusablePage(tab);
                 }).toList();
               }
 
@@ -787,7 +790,8 @@ class WindowActionPanelState extends State<WindowActionPanel> {
                 ActionIcon(
                   message: 'Minimize',
                   skipTraversal: isWindows &&
-                      widget.tabController.tabType == DesktopTabType.main,
+                      (widget.tabController.tabType == DesktopTabType.main ||
+                          widget.tabController.tabType == DesktopTabType.cm),
                   icon: IconFont.min,
                   onTap: () {
                     if (widget.isMainWindow) {
@@ -801,7 +805,10 @@ class WindowActionPanelState extends State<WindowActionPanel> {
               if (widget.showMaximize && !isMacOS)
                 Obx(() => ActionIcon(
                       skipTraversal: isWindows &&
-                          widget.tabController.tabType == DesktopTabType.main,
+                          (widget.tabController.tabType ==
+                                  DesktopTabType.main ||
+                              widget.tabController.tabType ==
+                                  DesktopTabType.cm),
                       message: stateGlobal.isMaximized.isTrue
                           ? 'Restore'
                           : 'Maximize',
@@ -817,7 +824,8 @@ class WindowActionPanelState extends State<WindowActionPanel> {
                 ActionIcon(
                   message: 'Close',
                   skipTraversal: isWindows &&
-                      widget.tabController.tabType == DesktopTabType.main,
+                      (widget.tabController.tabType == DesktopTabType.main ||
+                          widget.tabController.tabType == DesktopTabType.cm),
                   icon: IconFont.close,
                   onTap: () async {
                     final res = await widget.onClose?.call() ?? true;
@@ -1041,7 +1049,9 @@ class _ListView extends StatelessWidget {
                   child: child,
                 );
               }).toList());
-      if (controller.tabType != DesktopTabType.main || isHideSingleItem()) {
+      if ((controller.tabType != DesktopTabType.main &&
+              !(isWindows && controller.tabType == DesktopTabType.cm)) ||
+          isHideSingleItem()) {
         return buildList(null);
       }
       return AccessibleTabNavigation(
@@ -1123,6 +1133,7 @@ class _TabState extends State<_Tab> with RestorationMixin {
       return ConstrainedBox(
           constraints: BoxConstraints(maxWidth: widget.maxLabelWidth ?? 200),
           child: Tooltip(
+            excludeFromSemantics: widget.tabType == DesktopTabType.cm,
             message:
                 widget.tabType == DesktopTabType.main ? '' : widget.label.value,
             child: Text(
@@ -1238,7 +1249,8 @@ class _TabState extends State<_Tab> with RestorationMixin {
             )),
       ),
     );
-    return widget.tabType == DesktopTabType.main
+    return (widget.tabType == DesktopTabType.main ||
+            (isWindows && widget.tabType == DesktopTabType.cm))
         ? Semantics(
             container: true,
             tab: true,
@@ -1407,6 +1419,10 @@ class _TabDropDownButtonState extends State<_TabDropDownButton> {
         .map((e) => e.key)
         .toList();
     return ActionIcon(
+      message:
+          widget.controller.tabType == DesktopTabType.cm ? 'Connection' : null,
+      skipTraversal:
+          isWindows && widget.controller.tabType == DesktopTabType.cm,
       onTapDown: (details) {
         final x = details.globalPosition.dx;
         final y = details.globalPosition.dy;

@@ -5,8 +5,11 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/common/widgets/audio_input.dart';
+import 'package:flutter_hbb/common/widgets/focus_aware_offstage.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/widgets/tabbar_widget.dart';
+import 'package:flutter_hbb/desktop/widgets/cm_keyboard_scope.dart';
+import 'package:flutter_hbb/desktop/widgets/cm_access_key.dart';
 import 'package:flutter_hbb/models/chat_model.dart';
 import 'package:flutter_hbb/models/cm_file_model.dart';
 import 'package:flutter_hbb/utils/platform_channel.dart';
@@ -213,10 +216,7 @@ class ConnectionManagerState extends State<ConnectionManager>
                 return Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Tooltip(
-                        message: key,
-                        waitDuration: Duration(seconds: 1),
-                        child: label),
+                    label,
                     unreadMessageCountBuilder(client?.unreadChatMessageCount)
                         .marginOnly(left: 4),
                   ],
@@ -290,7 +290,7 @@ class ConnectionManagerState extends State<ConnectionManager>
   }
 
   Widget _buildKeyEventBlock(Widget child) {
-    return ExcludeFocus(child: child, excluding: true);
+    return CmKeyboardScope(child: child);
   }
 
   Widget buildTitleBar() {
@@ -554,24 +554,36 @@ class _CmHeaderState extends State<_CmHeader>
               ],
             ),
           ),
-          Offstage(
+          FocusAwareOffstage(
             offstage: !client.authorized ||
                 (client.type_() != ClientType.remote &&
                     client.type_() != ClientType.file &&
                     client.type_() != ClientType.camera),
-            child: IconButton(
-              onPressed: () => checkClickTime(client.id, () {
-                if (client.type_() == ClientType.file) {
-                  gFFI.chatModel.toggleCMFilePage();
-                } else {
-                  gFFI.chatModel
-                      .toggleCMChatPage(MessageKey(client.peerId, client.id));
-                }
-              }),
-              icon: SvgPicture.asset(client.type_() == ClientType.file
-                  ? 'assets/file_transfer.svg'
-                  : 'assets/chat2.svg'),
-              splashRadius: kDesktopIconButtonSplashRadius,
+            child: CmAccessKey(
+              action:
+                  client.type_() == ClientType.file ? 'Transfer file' : 'Chat',
+              builder: (focusNode) => Semantics(
+                button: true,
+                hint: cmAccessKeyHint('Chat'),
+                child: IconButton(
+                  focusNode: focusNode,
+                  tooltip: translate(client.type_() == ClientType.file
+                      ? 'Transfer file'
+                      : 'Chat'),
+                  onPressed: () => checkClickTime(client.id, () {
+                    if (client.type_() == ClientType.file) {
+                      gFFI.chatModel.toggleCMFilePage();
+                    } else {
+                      gFFI.chatModel.toggleCMChatPage(
+                          MessageKey(client.peerId, client.id));
+                    }
+                  }),
+                  icon: SvgPicture.asset(client.type_() == ClientType.file
+                      ? 'assets/file_transfer.svg'
+                      : 'assets/chat2.svg'),
+                  splashRadius: kDesktopIconButtonSplashRadius,
+                ),
+              ),
             ),
           )
         ],
@@ -624,35 +636,56 @@ class _PrivilegeBoard extends StatefulWidget {
 
 class _PrivilegeBoardState extends State<_PrivilegeBoard> {
   late final client = widget.client;
-  Widget buildPermissionIcon(bool enabled, IconData iconData,
-      Function(bool)? onTap, String tooltipText,
+  Widget buildPermissionIcon(
+      bool enabled, IconData iconData, Function(bool)? onTap, String action,
       {required bool canModify}) {
-    return Tooltip(
-      message: "$tooltipText: ${enabled ? "ON" : "OFF"}",
-      waitDuration: Duration.zero,
-      child: Container(
-        decoration: BoxDecoration(
-          color: enabled
-              ? (canModify ? MyTheme.accent : MyTheme.accent.withOpacity(0.6))
-              : Colors.grey[700],
-          borderRadius: BorderRadius.circular(10.0),
-        ),
-        padding: EdgeInsets.all(8.0),
-        child: InkWell(
-          onTap: canModify
-              ? () =>
-                  checkClickTime(widget.client.id, () => onTap?.call(!enabled))
-              : null,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              Expanded(
-                child: Icon(
-                  iconData,
-                  color: Colors.white,
-                ),
+    final tooltipText = translate(action);
+    return CmAccessKey(
+      action: action,
+      builder: (focusNode) => Semantics(
+        label: tooltipText,
+        hint: cmAccessKeyHint(action),
+        checked: enabled,
+        enabled: canModify,
+        child: Tooltip(
+          excludeFromSemantics: true,
+          message: "$tooltipText: ${enabled ? "ON" : "OFF"}",
+          waitDuration: Duration.zero,
+          child: Container(
+            decoration: BoxDecoration(
+              color: enabled
+                  ? (canModify
+                      ? MyTheme.accent
+                      : MyTheme.accent.withOpacity(0.6))
+                  : Colors.grey[700],
+              borderRadius: BorderRadius.circular(10.0),
+            ),
+            padding: EdgeInsets.all(8.0),
+            child: InkWell(
+              focusNode: focusNode,
+              onTap: canModify
+                  ? () => checkClickTime(
+                      widget.client.id, () => onTap?.call(!enabled))
+                  : null,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  Expanded(
+                    child: Icon(
+                      iconData,
+                      color: Colors.white,
+                    ),
+                  ),
+                  if (cmAccessKey(action) != null)
+                    ExcludeSemantics(
+                        child: Text(cmAccessKey(action)!,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                decoration: TextDecoration.underline))),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -711,7 +744,7 @@ class _PrivilegeBoardState extends State<_PrivilegeBoard> {
                             client.audio = enabled;
                           });
                         },
-                        translate('Enable audio'),
+                        'Enable audio',
                         canModify: canModifyPermission,
                       ),
                       buildPermissionIcon(
@@ -726,7 +759,7 @@ class _PrivilegeBoardState extends State<_PrivilegeBoard> {
                             client.recording = enabled;
                           });
                         },
-                        translate('Enable recording session'),
+                        'Enable recording session',
                         canModify: canModifyPermission,
                       ),
                     ]
@@ -743,7 +776,7 @@ class _PrivilegeBoardState extends State<_PrivilegeBoard> {
                             client.keyboard = enabled;
                           });
                         },
-                        translate('Enable keyboard/mouse'),
+                        'Enable keyboard/mouse',
                         canModify: canModifyPermission,
                       ),
                       buildPermissionIcon(
@@ -758,7 +791,7 @@ class _PrivilegeBoardState extends State<_PrivilegeBoard> {
                             client.clipboard = enabled;
                           });
                         },
-                        translate('Enable clipboard'),
+                        'Enable clipboard',
                         canModify: canModifyPermission,
                       ),
                       buildPermissionIcon(
@@ -773,7 +806,7 @@ class _PrivilegeBoardState extends State<_PrivilegeBoard> {
                             client.audio = enabled;
                           });
                         },
-                        translate('Enable audio'),
+                        'Enable audio',
                         canModify: canModifyPermission,
                       ),
                       buildPermissionIcon(
@@ -788,7 +821,7 @@ class _PrivilegeBoardState extends State<_PrivilegeBoard> {
                             client.file = enabled;
                           });
                         },
-                        translate('Enable file copy and paste'),
+                        'Enable file copy and paste',
                         canModify: canModifyPermission,
                       ),
                       buildPermissionIcon(
@@ -803,7 +836,7 @@ class _PrivilegeBoardState extends State<_PrivilegeBoard> {
                             client.restart = enabled;
                           });
                         },
-                        translate('Enable remote restart'),
+                        'Enable remote restart',
                         canModify: canModifyPermission,
                       ),
                       buildPermissionIcon(
@@ -818,7 +851,7 @@ class _PrivilegeBoardState extends State<_PrivilegeBoard> {
                             client.recording = enabled;
                           });
                         },
-                        translate('Enable recording session'),
+                        'Enable recording session',
                         canModify: canModifyPermission,
                       ),
                       // only windows support block input
@@ -835,7 +868,7 @@ class _PrivilegeBoardState extends State<_PrivilegeBoard> {
                               client.blockInput = enabled;
                             });
                           },
-                          translate('Enable blocking user input'),
+                          'Enable blocking user input',
                           canModify: canModifyPermission,
                         ),
                       if (bind.mainSupportedPrivacyModeImpls() != '[]')
@@ -851,7 +884,7 @@ class _PrivilegeBoardState extends State<_PrivilegeBoard> {
                               client.privacyMode = enabled;
                             });
                           },
-                          translate('Enable privacy mode'),
+                          'Enable privacy mode',
                           canModify: canModifyPermission,
                         )
                     ],
@@ -888,7 +921,7 @@ class _CmControlPanel extends StatelessWidget {
     return Column(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        Offstage(
+        FocusAwareOffstage(
           offstage: !client.inVoiceCall,
           child: Row(
             children: [
@@ -974,7 +1007,7 @@ class _CmControlPanel extends StatelessWidget {
             ],
           ),
         ),
-        Offstage(
+        FocusAwareOffstage(
           offstage: !client.incomingVoiceCall,
           child: Row(
             children: [
@@ -1007,7 +1040,7 @@ class _CmControlPanel extends StatelessWidget {
             ],
           ),
         ),
-        Offstage(
+        FocusAwareOffstage(
           offstage: !client.fromSwitch,
           child: buildButton(context,
               color: Colors.purple,
@@ -1016,7 +1049,7 @@ class _CmControlPanel extends StatelessWidget {
               text: "Switch Sides",
               textColor: Colors.white),
         ),
-        Offstage(
+        FocusAwareOffstage(
           offstage: !showElevation,
           child: buildButton(
             context,
@@ -1081,7 +1114,7 @@ class _CmControlPanel extends StatelessWidget {
     return Column(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        Offstage(
+        FocusAwareOffstage(
           offstage: !showElevation || !showAccept,
           child: buildButton(context, color: Colors.green[700], onClick: () {
             handleAccept(context);
@@ -1143,55 +1176,74 @@ class _CmControlPanel extends StatelessWidget {
       String? tooltip,
       GestureTapDownCallback? onTapDown}) {
     assert(!(onClick == null && onTapDown == null));
-    Widget textWidget;
-    if (icon != null) {
-      textWidget = Text(
-        translate(text),
-        style: TextStyle(color: textColor),
-        textAlign: TextAlign.center,
-      );
-    } else {
-      textWidget = Expanded(
-        child: Text(
-          translate(text),
-          style: TextStyle(color: textColor),
-          textAlign: TextAlign.center,
-        ),
-      );
-    }
-    final borderRadius = BorderRadius.circular(10.0);
-    final btn = Container(
-      height: 28,
-      decoration: BoxDecoration(
-          color: color, borderRadius: borderRadius, border: border),
-      child: InkWell(
-        borderRadius: borderRadius,
-        onTap: () {
-          if (onClick == null) return;
-          checkClickTime(client.id, onClick);
-        },
-        onTapDown: (details) {
-          if (onTapDown == null) return;
-          checkClickTime(client.id, () {
-            onTapDown.call(details);
-          });
-        },
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Offstage(offstage: icon == null, child: icon).marginOnly(right: 5),
-            textWidget,
-          ],
-        ),
-      ),
+    return CmAccessKey(
+      action: text,
+      onInvoke: onClick != null
+          ? null
+          : (focusNode) => checkClickTime(client.id, () {
+                final box = focusNode.context?.findRenderObject();
+                if (box is RenderBox && box.hasSize) {
+                  onTapDown?.call(TapDownDetails(
+                      globalPosition:
+                          box.localToGlobal(box.size.center(Offset.zero))));
+                }
+              }),
+      builder: (focusNode) {
+        Widget textWidget;
+        if (icon != null) {
+          textWidget = Text.rich(
+            cmAccessKeyLabel(translate(text), text),
+            style: TextStyle(color: textColor),
+            textAlign: TextAlign.center,
+          );
+        } else {
+          textWidget = Expanded(
+            child: Text.rich(
+              cmAccessKeyLabel(translate(text), text),
+              style: TextStyle(color: textColor),
+              textAlign: TextAlign.center,
+            ),
+          );
+        }
+        final borderRadius = BorderRadius.circular(10.0);
+        final btn = Container(
+          height: 28,
+          decoration: BoxDecoration(
+              color: color, borderRadius: borderRadius, border: border),
+          child: InkWell(
+            focusNode: focusNode,
+            borderRadius: borderRadius,
+            onTap: () {
+              if (onClick == null) return;
+              checkClickTime(client.id, onClick);
+            },
+            onTapDown: (details) {
+              if (onTapDown == null) return;
+              checkClickTime(client.id, () {
+                onTapDown.call(details);
+              });
+            },
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Offstage(offstage: icon == null, child: icon)
+                    .marginOnly(right: 5),
+                textWidget,
+              ],
+            ),
+          ),
+        );
+        final accessibleButton =
+            Semantics(button: true, hint: cmAccessKeyHint(text), child: btn);
+        return (tooltip != null
+                ? Tooltip(
+                    message: translate(tooltip),
+                    child: accessibleButton,
+                  )
+                : accessibleButton)
+            .marginAll(4);
+      },
     );
-    return (tooltip != null
-            ? Tooltip(
-                message: translate(tooltip),
-                child: btn,
-              )
-            : btn)
-        .marginAll(4);
   }
 
   void handleDisconnect() {

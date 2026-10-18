@@ -8,6 +8,7 @@ import 'package:flutter_hbb/common/shared_state.dart';
 import 'package:flutter_hbb/common/widgets/setting_widgets.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/widgets/tabbar_widget.dart';
+import 'package:flutter_hbb/desktop/widgets/cm_access_key.dart';
 import 'package:flutter_hbb/models/peer_model.dart';
 import 'package:flutter_hbb/models/peer_tab_model.dart';
 import 'package:flutter_hbb/models/state_model.dart';
@@ -490,6 +491,7 @@ Future<String> changeAutoDisconnectTimeout(String old) async {
 }
 
 class DialogTextField extends StatelessWidget {
+  final String accessKeyAction;
   final String title;
   final String? hintText;
   final bool obscureText;
@@ -510,6 +512,7 @@ class DialogTextField extends StatelessWidget {
 
   DialogTextField(
       {Key? key,
+      this.accessKeyAction = '',
       this.focusNode,
       this.obscureText = false,
       this.errorText,
@@ -531,23 +534,30 @@ class DialogTextField extends StatelessWidget {
         Expanded(
           child: Column(
             children: [
-              TextField(
-                decoration: InputDecoration(
-                  labelText: title,
-                  hintText: hintText,
-                  prefixIcon: prefixIcon,
-                  suffixIcon: suffixIcon,
-                  helperText: helperText,
-                  helperMaxLines: 8,
-                ),
-                controller: controller,
-                focusNode: focusNode,
-                autofocus: true,
-                obscureText: obscureText,
-                keyboardType: keyboardType,
-                inputFormatters: inputFormatters,
-                maxLength: maxLength,
-              ),
+              CmAccessKey(
+                  action: accessKeyAction,
+                  focusNode: focusNode,
+                  onInvoke: (_) {},
+                  builder: (node) => Semantics(
+                      hint: cmAccessKeyHint(accessKeyAction),
+                      child: TextField(
+                        decoration: InputDecoration(
+                          label: Text.rich(
+                              cmAccessKeyLabel(title, accessKeyAction)),
+                          hintText: hintText,
+                          prefixIcon: prefixIcon,
+                          suffixIcon: suffixIcon,
+                          helperText: helperText,
+                          helperMaxLines: 8,
+                        ),
+                        controller: controller,
+                        focusNode: node,
+                        autofocus: true,
+                        obscureText: obscureText,
+                        keyboardType: keyboardType,
+                        inputFormatters: inputFormatters,
+                        maxLength: maxLength,
+                      ))),
               if (errorText != null)
                 Align(
                   alignment: Alignment.centerLeft,
@@ -818,6 +828,7 @@ class PasswordWidget extends StatefulWidget {
     this.hintText,
     this.errorText,
     this.title,
+    this.accessKeyAction = 'Password',
     this.maxLength,
   }) : super(key: key);
 
@@ -827,6 +838,7 @@ class PasswordWidget extends StatefulWidget {
   final String? hintText;
   final String? errorText;
   final String? title;
+  final String accessKeyAction;
   final int? maxLength;
 
   @override
@@ -872,6 +884,7 @@ class _PasswordWidgetState extends State<PasswordWidget> {
   Widget build(BuildContext context) {
     return DialogTextField(
       title: translate(widget.title ?? DialogTextField.kPasswordTitle),
+      accessKeyAction: widget.accessKeyAction,
       hintText: translate(widget.hintText ?? 'Enter your password'),
       controller: widget.controller,
       prefixIcon: DialogTextField.kPasswordIcon,
@@ -1037,14 +1050,19 @@ _connectDialog(
       bool remember,
       ValueChanged<bool?>? onChanged,
     ) {
-      return CheckboxListTile(
-        contentPadding: const EdgeInsets.all(0),
-        dense: true,
-        controlAffinity: ListTileControlAffinity.leading,
-        title: Text(desc),
-        value: remember,
-        onChanged: onChanged,
-      );
+      return CmAccessKey(
+          action: 'Remember password',
+          builder: (node) => MergeSemantics(child: Semantics(
+              hint: cmAccessKeyHint('Remember password'),
+              child: CheckboxListTile(
+                focusNode: node,
+                contentPadding: const EdgeInsets.all(0),
+                dense: true,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: Text.rich(cmAccessKeyLabel(desc, 'Remember password')),
+                value: remember,
+                onChanged: onChanged,
+              ))));
     }
 
     osAccountWidget() {
@@ -1056,6 +1074,7 @@ _connectDialog(
           if (osAccountDescTip != null) descWidget(translate(osAccountDescTip)),
           DialogTextField(
             title: translate(DialogTextField.kUsernameTitle),
+            accessKeyAction: 'Username',
             controller: osUsernameController,
             prefixIcon: DialogTextField.kUsernameIcon,
             errorText: null,
@@ -1074,6 +1093,7 @@ _connectDialog(
             ),
           PasswordWidget(
             controller: osPasswordController,
+            accessKeyAction: 'OS Password',
             autoFocus: false,
           ),
         ],

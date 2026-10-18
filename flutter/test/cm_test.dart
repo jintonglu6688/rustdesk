@@ -6,10 +6,10 @@ void main() {
   test('connection manager demo clients match the current Client API', () {
     expect(cm_demo.testClients, hasLength(4));
     expect(cm_demo.testClients.map((client) => client.name), [
-      'UserAAAAAA',
-      'UserBBBBB',
-      'UserC',
-      'UserDDDDDDDDDDDd',
+      '待接受测试设备一',
+      '待接受测试设备二',
+      '待接受测试设备三',
+      '已连接测试设备',
     ]);
     expect(
       cm_demo.testClients.every(

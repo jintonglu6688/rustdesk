@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/common/widgets/setting_widgets.dart';
 import 'package:flutter_hbb/common/widgets/toolbar.dart';
+import 'package:flutter_hbb/desktop/widgets/cm_access_key.dart';
 import 'package:get/get.dart';
 
 import '../../common.dart';
@@ -113,7 +114,8 @@ void showServerSettingsWithValue(
           children: [
             SizedBox(
               width: 120,
-              child: Text(label),
+              child:
+                  Text.rich(cmAccessKeyLabel(label, serverFieldAction(label))),
             ),
             SizedBox(width: 8),
             Expanded(
@@ -216,26 +218,44 @@ Widget serverSettingsTextFormField({
   bool showLabelText = true,
   EdgeInsetsGeometry? contentPadding,
 }) {
-  final field = TextFormField(
-    controller: controller,
-    decoration: InputDecoration(
-      labelText: showLabelText ? label : null,
-      errorText: errorMsg.isEmpty ? null : errorMsg,
-      contentPadding: contentPadding,
-    ),
-    validator: validator,
-    autofocus: autofocus,
-    keyboardType: TextInputType.visiblePassword,
-    textCapitalization: TextCapitalization.none,
-    autocorrect: false,
-    enableSuggestions: false,
-    smartDashesType: SmartDashesType.disabled,
-    smartQuotesType: SmartQuotesType.disabled,
-    enableIMEPersonalizedLearning: false,
-    spellCheckConfiguration: const SpellCheckConfiguration.disabled(),
-  );
-  return showLabelText ? field : Semantics(label: label, child: field);
+  final action = serverFieldAction(label);
+  return CmAccessKey(
+      action: action,
+      onInvoke: (_) {},
+      builder: (node) {
+        final field = TextFormField(
+          focusNode: node,
+          controller: controller,
+          decoration: InputDecoration(
+            labelText: showLabelText ? label : null,
+            errorText: errorMsg.isEmpty ? null : errorMsg,
+            contentPadding: contentPadding,
+          ),
+          validator: validator,
+          autofocus: autofocus,
+          keyboardType: TextInputType.visiblePassword,
+          textCapitalization: TextCapitalization.none,
+          autocorrect: false,
+          enableSuggestions: false,
+          smartDashesType: SmartDashesType.disabled,
+          smartQuotesType: SmartQuotesType.disabled,
+          enableIMEPersonalizedLearning: false,
+          spellCheckConfiguration: const SpellCheckConfiguration.disabled(),
+        );
+        return Semantics(
+            label: showLabelText ? null : label,
+            hint: cmAccessKeyHint(action),
+            child: field);
+      });
 }
+
+String serverFieldAction(String label) => const [
+      'ID Server',
+      'Relay Server',
+      'API Server',
+      'Key'
+    ].firstWhere((action) => label == action || label == translate(action),
+        orElse: () => '');
 
 void setPrivacyModeDialog(
   OverlayDialogManager dialogManager,

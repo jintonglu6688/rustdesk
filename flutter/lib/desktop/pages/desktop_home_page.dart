@@ -13,6 +13,7 @@ import 'package:flutter_hbb/desktop/pages/connection_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_setting_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_tab_page.dart';
 import 'package:flutter_hbb/desktop/widgets/update_progress.dart';
+import 'package:flutter_hbb/desktop/widgets/cm_access_key.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/models/server_model.dart';
 import 'package:flutter_hbb/models/state_model.dart';
@@ -269,25 +270,33 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     return MouseRegion(
       onEnter: (_) => hover.value = true,
       onExit: (_) => hover.value = false,
-      child: IconButton(
-        tooltip: translate('Settings'),
-        padding: EdgeInsets.zero,
-        constraints: const BoxConstraints(),
-        onPressed: DesktopTabPage.onAddSetting,
-        icon: Obx(
-          () => CircleAvatar(
-            radius: 15,
-            backgroundColor: hover.value
-                ? Theme.of(context).scaffoldBackgroundColor
-                : Theme.of(context).colorScheme.background,
-            child: Icon(
-              Icons.more_vert_outlined,
-              size: 20,
-              color: hover.value ? textColor : textColor?.withOpacity(0.5),
-            ),
-          ),
-        ),
-      ),
+      child: CmAccessKey(
+          action: 'Settings',
+          builder: (node) => MergeSemantics(child: Semantics(
+              button: true,
+              hint: cmAccessKeyHint('Settings'),
+              child: IconButton(
+                focusNode: node,
+                tooltip: cmAccessKeyLabel(translate('Settings'), 'Settings')
+                    .toPlainText(),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: DesktopTabPage.onAddSetting,
+                icon: Obx(
+                  () => CircleAvatar(
+                    radius: 15,
+                    backgroundColor: hover.value
+                        ? Theme.of(context).scaffoldBackgroundColor
+                        : Theme.of(context).colorScheme.background,
+                    child: Icon(
+                      Icons.more_vert_outlined,
+                      size: 20,
+                      color:
+                          hover.value ? textColor : textColor?.withOpacity(0.5),
+                    ),
+                  ),
+                ),
+              )))),
     );
   }
 
