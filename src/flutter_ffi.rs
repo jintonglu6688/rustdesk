@@ -300,6 +300,8 @@ pub fn will_session_close_close_session(session_id: SessionID) -> SyncReturn<boo
 }
 
 pub fn session_close(session_id: SessionID) {
+    #[cfg(target_os = "windows")]
+    crate::keyboard::windows_control::forget(session_id);
     if let Some(session) = sessions::remove_session_by_session_id(&session_id) {
         // `release_remote_keys` is not required for mobile platforms in common cases.
         // But we still call it to make the code more stable.
@@ -651,6 +653,10 @@ pub fn session_handle_flutter_raw_key_event(
 // As Rust is multi-threaded, enter() can be called before leave().
 // The Rust-side grab ownership state filters stale transitions.
 pub fn session_enter_or_leave(_session_id: SessionID, _enter: bool) -> SyncReturn<()> {
+    #[cfg(target_os = "windows")]
+    if _enter && crate::keyboard::windows_control::is_local(_session_id.as_u128()) {
+        return SyncReturn(());
+    }
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     if let Some(session) = sessions::get_session_by_session_id(&_session_id) {
         let keyboard_mode = session.get_keyboard_mode();
@@ -673,6 +679,26 @@ pub fn session_enter_or_leave(_session_id: SessionID, _enter: bool) -> SyncRetur
         }
     }
     SyncReturn(())
+}
+
+pub fn session_set_keyboard_local(session_id: SessionID, local: bool) -> SyncReturn<bool> {
+    #[cfg(target_os = "windows")]
+    return SyncReturn(crate::keyboard::windows_control::set_local(session_id, local));
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (session_id, local);
+        SyncReturn(false)
+    }
+}
+
+pub fn session_get_keyboard_local(session_id: SessionID) -> SyncReturn<bool> {
+    #[cfg(target_os = "windows")]
+    return SyncReturn(crate::keyboard::windows_control::is_local(session_id.as_u128()));
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = session_id;
+        SyncReturn(false)
+    }
 }
 
 pub fn session_input_key(

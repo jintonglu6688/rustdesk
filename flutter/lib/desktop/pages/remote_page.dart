@@ -4,6 +4,7 @@ import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/semantics.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_hbb/models/state_model.dart';
@@ -16,6 +17,7 @@ import '../../common/widgets/dialog.dart';
 import '../../common/widgets/toolbar.dart';
 import '../../models/model.dart';
 import '../../models/input_model.dart';
+import '../../models/windows_keyboard_control.dart';
 import '../../models/platform_model.dart';
 import '../../common/shared_state.dart';
 import '../../utils/image.dart';
@@ -174,6 +176,19 @@ class _RemotePageState extends State<RemotePage>
       display: widget.display,
       displays: widget.displays,
     );
+    if (isWindows) {
+      final control = _ffi.inputModel.keyboardControl;
+      control.local.value = bind.sessionGetKeyboardLocal(sessionId: sessionId);
+      control.readShortcut = () =>
+          bind.mainGetLocalOption(key: WindowsKeyboardControl.option);
+      control.refreshShortcut();
+      control.onSwitch = _switchKeyboardControl;
+      control.activateSession = _activateKeyboardControlSession;
+      control.canHandleShortcut = () =>
+          _canSwitchKeyboardControl &&
+          (control.local.value || _rawKeyFocusNode.hasFocus);
+      HardwareKeyboard.instance.addHandler(control.handleKeyEvent);
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: []);
       _ffi.dialogManager
@@ -276,7 +291,55 @@ class _RemotePageState extends State<RemotePage>
   // Every Windows requestFocus() must pass this, or a blocking dialog or an
   // inactive tab could hand remote input to this page.
   bool get _windowsCanFocusRemoteInput =>
-      _isSelectedTab && _blockableOverlayState.middleBlocked.isFalse;
+      _isSelectedTab &&
+      _blockableOverlayState.middleBlocked.isFalse &&
+      !_ffi.inputModel.keyboardControl.local.value;
+
+  bool get _canSwitchKeyboardControl =>
+      mounted && !_isWindowBlur && stateGlobal.isFocused.value && _isSelectedTab &&
+      _blockableOverlayState.middleBlocked.isFalse &&
+      _ffi.ffiModel.pi.isSet.isTrue &&
+      _ffi.ffiModel.waitForFirstImage.isFalse &&
+      _ffi.ffiModel.keyboard && !_ffi.ffiModel.viewOnly;
+
+  Future<bool> _activateKeyboardControlSession() async {
+    // Remote engines use desktop_multi_window focus events. The window_manager
+    // method channel is registered only in the main engine.
+    if (!mounted || !_ffi.inputModel.keyboardControl.local.value ||
+        _isWindowBlur || !stateGlobal.isFocused.value) return false;
+    if (widget.tabController?.jumpToByKey(widget.id) == false) return false;
+    return _canSwitchKeyboardControl;
+  }
+
+  bool _switchKeyboardControl(bool local) {
+    if (!local && !_canSwitchKeyboardControl) return false;
+    if (!bind.sessionSetKeyboardLocal(sessionId: sessionId, local: local)) {
+      return false;
+    }
+    final input = _ffi.inputModel;
+    input.toReleaseKeys.reset();
+    input.toReleaseRawKeys.reset();
+    input.resetModifiers();
+    if (local) {
+      input.setRelativeMouseMode(false);
+      _rawKeyFocusNode.unfocus();
+    }
+    // Wait for ExcludeFocus and the expanded toolbar to reflect the new mode.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          !_canSwitchKeyboardControl ||
+          input.keyboardControl.local.value != local) return;
+      if (local) {
+        input.keyboardControl.menuFocus.requestFocus();
+      } else {
+        _rawKeyFocusNode.requestFocus();
+      }
+      SemanticsService.announce(
+          translate(local ? 'Keyboard control: local' : 'Keyboard control: remote'),
+          Directionality.of(context));
+    });
+    return true;
+  }
 
   bool get _isMacOSKeyboardContextActive {
     return stateGlobal.isFocused.value && !_isWindowBlur && _isSelectedTab;
@@ -483,6 +546,7 @@ class _RemotePageState extends State<RemotePage>
       // unfocus the primary-focus when the whole window is lost focus,
       // and let OS to handle events instead.
       _rawKeyFocusNode.unfocus();
+      _ffi.inputModel.keyboardControl.cancelPendingResume();
     }
     stateGlobal.isFocused.value = false;
     _syncMacOSKeyboardGrab();
@@ -498,6 +562,7 @@ class _RemotePageState extends State<RemotePage>
   @override
   void onWindowFocus() {
     super.onWindowFocus();
+    if (isWindows) _ffi.inputModel.keyboardControl.refreshShortcut();
     // See [onWindowBlur].
     if (isWindows || isMacOS) {
       _isWindowBlur = false;
@@ -637,6 +702,12 @@ class _RemotePageState extends State<RemotePage>
   @override
   Future<void> dispose() async {
     final closeSession = closeSessionOnDispose.remove(widget.id) ?? true;
+    if (isWindows) {
+      HardwareKeyboard.instance.removeHandler(_ffi.inputModel.keyboardControl.handleKeyEvent);
+      _ffi.inputModel.keyboardControl.onSwitch = null;
+      _ffi.inputModel.keyboardControl.canHandleShortcut = null;
+      _ffi.inputModel.keyboardControl.activateSession = null;
+    }
 
     // https://github.com/flutter/flutter/issues/64935
     if (isMacOS) {
@@ -720,7 +791,9 @@ class _RemotePageState extends State<RemotePage>
         children: [
           Container(
               color: kColorCanvas,
-              child: RawKeyFocusScope(
+              child: Obx(() => ExcludeFocus(
+                  excluding: _ffi.inputModel.keyboardControl.local.value && isWindows,
+                  child: RawKeyFocusScope(
                   focusNode: _rawKeyFocusNode,
                   onFocusChange: (bool imageFocused) {
                     debugPrint(
@@ -743,7 +816,7 @@ class _RemotePageState extends State<RemotePage>
                     }
                   },
                   inputModel: _ffi.inputModel,
-                  child: getBodyForDesktop(context))),
+                  child: getBodyForDesktop(context))))),
           Stack(
             children: [
               _ffi.ffiModel.pi.isSet.isTrue &&
@@ -933,7 +1006,8 @@ class _RemotePageState extends State<RemotePage>
           stateGlobal.getInputSource(force: true);
           _syncMacOSKeyboardGrab(
               reassert: !isInputSourceFlutter, allowInactiveLifecycle: true);
-        } else if (!_rawKeyFocusNode.hasFocus) {
+        } else if (!_rawKeyFocusNode.hasFocus &&
+            (!isWindows || _windowsCanFocusRemoteInput)) {
           _rawKeyFocusNode.requestFocus();
         }
       },

@@ -35,6 +35,10 @@ const OS_LOWER_ANDROID: &str = "android";
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 static KEYBOARD_HOOKED: AtomicBool = AtomicBool::new(false);
 
+#[cfg(all(target_os = "windows", feature = "flutter"))]
+#[path = "platform/windows_keyboard_control.rs"]
+pub mod windows_control;
+
 // Track key down state for relative mouse mode exit shortcut.
 // macOS: Cmd+G (track G key)
 // Windows/Linux: Ctrl+Alt (track whichever modifier was pressed last)
@@ -171,6 +175,10 @@ pub mod client {
         match state {
             GrabState::Ready => {}
             GrabState::Run => {
+                #[cfg(all(target_os = "windows", feature = "flutter"))]
+                if windows_control::is_local(session_id) {
+                    return;
+                }
                 #[cfg(windows)]
                 update_grab_get_key_name(keyboard_mode);
 
@@ -614,6 +622,10 @@ fn start_grab_loop() {
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     std::thread::spawn(move || {
         let try_handle_keyboard = move |event: Event, key: Key, is_press: bool| -> Option<Event> {
+            #[cfg(all(target_os = "windows", feature = "flutter"))]
+            if windows_control::handle(key, is_press) {
+                return None;
+            }
             // fix #2211：CAPS LOCK don't work
             if key == Key::CapsLock || key == Key::NumLock {
                 return Some(event);

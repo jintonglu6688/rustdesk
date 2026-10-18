@@ -469,6 +469,19 @@ class FfiModel with ChangeNotifier {
       } else if (name == 'exit_relative_mouse_mode') {
         // Handle exit shortcut from rdev grab loop (Ctrl+Alt on Win/Linux, Cmd+G on macOS)
         parent.target?.inputModel.exitRelativeMouseModeWithKeyRelease();
+      } else if (name == 'keyboard_control_local') {
+        parent.target?.inputModel.keyboardControl.switchTo(true);
+      } else if (name == 'keyboard_control_resume') {
+        await parent.target?.inputModel.keyboardControl.resumeFromGlobalShortcut();
+      } else if (name == 'keyboard_control_hotkey_error') {
+        final ffi = parent.target;
+        if (ffi != null) {
+          msgBox(sessionId, 'custom-error', 'Error',
+              '${translate('Failed')}: '
+              '${translate('Keyboard control shortcut')} '
+              '(${ffi.inputModel.keyboardControl.shortcutLabel})',
+              '', ffi.dialogManager);
+        }
       } else {
         debugPrint('Event is not handled in the fixed branch: $name');
       }
@@ -4393,6 +4406,7 @@ class FFI {
     inputModel.resetModifiers();
     // Dispose relative mouse mode resources to ensure cursor is restored
     inputModel.disposeRelativeMouseMode();
+    inputModel.keyboardControl.dispose();
     inputModel.disposeSideButtonTracking();
     if (closeSession) {
       await bind.sessionClose(sessionId: sessionId);

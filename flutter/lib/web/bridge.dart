@@ -507,6 +507,11 @@ class RustdeskImpl {
     throw UnimplementedError("sessionHandleFlutterRawKeyEvent");
   }
 
+  bool sessionSetKeyboardLocal(
+          {required UuidValue sessionId, required bool local, dynamic hint}) => false;
+  bool sessionGetKeyboardLocal(
+          {required UuidValue sessionId, dynamic hint}) => false;
+
   void sessionEnterOrLeave(
       {required UuidValue sessionId, required bool enter, dynamic hint}) {
     js.context.callMethod('setByName', ['enter_or_leave', enter]);

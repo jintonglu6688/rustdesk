@@ -18,6 +18,7 @@ import '../../models/platform_model.dart';
 import '../../models/state_model.dart';
 import 'input_modifier_utils.dart';
 import 'relative_mouse_model.dart';
+import 'windows_keyboard_control.dart';
 import '../common.dart';
 import '../consts.dart';
 
@@ -331,6 +332,7 @@ class ToReleaseKeys {
 }
 
 class InputModel {
+  final keyboardControl = WindowsKeyboardControl();
   // Side mouse button support for Linux.
   // Flutter's Linux embedder drops X11 button 8/9 events, so we capture them
   // natively via GDK and forward through the platform channel.
@@ -821,6 +823,10 @@ class InputModel {
   }
 
   KeyEventResult handleKeyEvent(KeyEvent e) {
+    if (isWindows &&
+        (keyboardControl.handleKeyEvent(e) || keyboardControl.local.value)) {
+      return KeyEventResult.handled;
+    }
     if (isViewOnly) return KeyEventResult.handled;
     if (isViewCamera) return KeyEventResult.handled;
     if (!isInputSourceFlutter) {
@@ -1136,6 +1142,7 @@ class InputModel {
   }
 
   void enterOrLeave(bool enter) {
+    if (isWindows && enter && keyboardControl.local.value) return;
     toReleaseKeys.release(handleKeyEvent);
     toReleaseRawKeys.release(handleRawKeyEvent);
     _pointerMovedAfterEnter = false;

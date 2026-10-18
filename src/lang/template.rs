@@ -780,6 +780,11 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("RustDesk could not load a GStreamer component needed for screen capture ({})", ""),
         ("Relay fallback delay in seconds", ""),
         ("relay-fallback-delay-tip", ""),
-        ("To start a voice call, enable \"Audio capture\" on the \"Screen share\" page.", "")
+        ("To start a voice call, enable \"Audio capture\" on the \"Screen share\" page.", ""),
+        ("Keyboard control: local", ""),
+        ("Keyboard control: remote", ""),
+        ("Control the local keyboard", ""),
+        ("Control the remote keyboard", ""),
+        ("Keyboard control shortcut", ""),
     ].iter().cloned().collect();
 }

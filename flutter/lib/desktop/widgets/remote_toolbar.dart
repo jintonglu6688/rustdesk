@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../models/windows_keyboard_control.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common/widgets/audio_input.dart';
 import 'package:flutter_hbb/common/widgets/dialog.dart';
@@ -669,6 +670,7 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
   }
 
   _debouncerHideProc(int v) {
+    if (isWindows && widget.ffi.inputModel.keyboardControl.local.value) return;
     if (!pin && collapse.isFalse && _isCursorOverImage && _dragging.isFalse) {
       collapse.value = true;
     }
@@ -690,7 +692,8 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
         return const SizedBox.shrink();
       }
       // If toolbar is hidden, return empty widget
-      if (hide.value) {
+      final keyboardLocal = isWindows && widget.ffi.inputModel.keyboardControl.local.value;
+      if (hide.value && !keyboardLocal) {
         return const SizedBox.shrink();
       }
       final edge = _edge.value;
@@ -711,7 +714,7 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
         alignment: _alignmentForEdge(edge, _fraction.value),
         child: KeyedSubtree(
           key: _toolbarKey,
-          child: collapse.isFalse
+          child: collapse.isFalse || keyboardLocal
               ? _buildToolbar(context, edge, isHorizontal)
               : _buildDraggableCollapse(context, edge, isHorizontal),
         ),
@@ -2545,13 +2548,39 @@ class _KeyboardMenu extends StatelessWidget {
       return toggles;
     }
 
-    return _IconSubmenuButton(
-        tooltip: 'Keyboard Settings',
+    final control = ffi.inputModel.keyboardControl;
+    buildButton() => _IconSubmenuButton(
+        focusNode: isWindows ? control.menuFocus : null,
+        tooltip: isWindows
+            ? '${translate('Keyboard Settings')}. ${translate(control.local.value ? 'Keyboard control: local' : 'Keyboard control: remote')}. ${control.shortcutLabel}'
+            : 'Keyboard Settings',
         svg: "assets/keyboard_mouse.svg",
         ffi: ffi,
         color: _ToolbarTheme.blueColor,
         hoverColor: _ToolbarTheme.hoverBlueColor,
         menuChildrenGetter: (_) => [
+              if (isWindows) ...[
+                MenuButton(
+                  child: Text('${translate(control.local.value ? 'Control the remote keyboard' : 'Control the local keyboard')} (${control.shortcutLabel})'),
+                  onPressed: () => control.switchTo(!control.local.value),
+                ),
+                _SubmenuButton(
+                  ffi: ffi,
+                  child: Text(translate('Keyboard control shortcut')),
+                  menuChildren: WindowsKeyboardControl.keys.keys.map((key) =>
+                    RdoMenuButton<String>(
+                      value: key,
+                      groupValue: control.shortcut.value,
+                      child: Text('Ctrl+Shift+$key'),
+                      onChanged: (value) async {
+                        if (value == null) return;
+                        await bind.mainSetLocalOption(key: WindowsKeyboardControl.option, value: value);
+                        control.setShortcut(value);
+                      },
+                    )).toList(),
+                ),
+                Divider(),
+              ],
               keyboardMode(),
               localKeyboardType(),
               inputSource(),
@@ -2565,6 +2594,7 @@ class _KeyboardMenu extends StatelessWidget {
               ...mouseSpeed(),
               ...mobileActions(),
             ]);
+    return isWindows ? Obx(buildButton) : buildButton();
   }
 
   mouseSpeed() {
@@ -3076,6 +3106,7 @@ class _IconMenuButtonState extends State<_IconMenuButton> {
 }
 
 class _IconSubmenuButton extends StatefulWidget {
+  final FocusNode? focusNode;
   final String tooltip;
   final String? svg;
   final Widget? icon;
@@ -3097,6 +3128,7 @@ class _IconSubmenuButton extends StatefulWidget {
     this.ffi,
     this.menuStyle,
     this.width,
+    this.focusNode,
   }) : super(key: key);
 
   @override
@@ -3125,6 +3157,7 @@ class _IconSubmenuButtonState extends State<_IconSubmenuButton> {
         width: widget.width ?? _ToolbarTheme.buttonSize,
         height: _ToolbarTheme.buttonSize,
         child: SubmenuButton(
+            focusNode: widget.focusNode,
             menuStyle:
                 widget.menuStyle ?? _ToolbarTheme.defaultMenuStyle(context),
             style: _ToolbarTheme.defaultMenuButtonStyle,
